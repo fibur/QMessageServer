@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="style.css">
+    <title>Chat</title>
+</head>
+<body>
+    <div id="loginForm">
+        <input type="text" id="username" placeholder="Enter your username">
+        <button onclick="login()">Login</button>
+        <span id="loginError" style="color: red;"></span>
+    </div>
+
+    <div id="chat" style="display: none;">
+        <div id="users">
+            <h2>Users</h2>
+            <ul id="userList"></ul>
+        </div>
+        <div id="messages">
+            <h2>Messages</h2>
+            <div id="messageHistory" class="message-container"></div>
+            <div class="message-input-container">
+                <input type="text" id="message" placeholder="Type your message here" />
+                <button class="send-button" onclick="sendMessage()">Send</button>
+            </div>
+            <button onclick="logout()">Logout</button>
+        </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>

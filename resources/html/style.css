@@ -1,0 +1,136 @@
+/* set global font */
+body {
+    font-family: Arial, sans-serif;
+  }
+  
+  /* style for login form */
+  #loginForm {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+  }
+  
+  #username {
+    font-size: 1.2em;
+    padding: 5px;
+    margin-bottom: 10px;
+  }
+  
+  #loginError {
+    margin-top: 10px;
+  }
+  
+  /* style for chat window */
+  #chat {
+    display: flex;
+    height: 100vh;
+  }
+  
+  #users {
+    width: 30%;
+    background-color: #f0f0f0;
+    padding: 10px;
+  }
+  
+  #users h2 {
+    margin-top: 0;
+  }
+  
+  #userList {
+    list-style-type: none;
+    margin: 0;
+    padding: 0;
+  }
+  
+  .user-item {
+    cursor: pointer;
+    padding: 5px;
+    margin-bottom: 2px;
+    background-color: #f0f0f0;
+    color: #333;
+  }
+  
+  .user-item:hover {
+    background-color: #ddd;
+  }
+  
+  .user-item.selected {
+    background-color: #ccc;
+  }
+  
+  .user-item.unread {
+    font-weight: bold;
+  }
+  
+  #messages {
+    width: 70%;
+    padding: 10px;
+  }
+  
+  #messages h2 {
+    margin-top: 0;
+  }
+  
+  #messageHistory {
+    height: 300px;
+    overflow-y: auto;
+    border: 1px solid #ccc;
+    padding: 10px;
+    margin-bottom: 10px;
+  }
+  
+  .message {
+    width: calc(100% - 30px);
+    margin: 5px;
+    padding: 5px;
+    word-wrap: break-word;
+    border-radius: 5px;
+  }
+  
+  .message.sent {
+    background-color: #e6f7ff;
+    text-align: right;
+  }
+  
+  .message.received {
+    background-color: #f0f0f0;
+    text-align: left;
+  }
+  
+  .message-container .timestamp {
+    font-size: 0.8em;
+    color: #777;
+    margin-left: 10px;
+  }
+  
+  .message-input-container {
+    display: flex;
+    align-items: center;
+    margin-top: 10px;
+  }
+  
+  #message {
+    flex: 1;
+    font-size: 1.2em;
+    padding: 5px;
+    margin-right: 5px;
+  }
+  
+  .login-Button {
+  font-size: 1.2em;
+  padding: 5px 10px;
+  margin-top: 10px;
+  }
+  
+  .send-Button {
+  font-size: 1.2em;
+  padding: 5px 10px;
+  margin-left: 5px;
+  }
+  .logout-Button {
+  font-size: 1.2em;
+  padding: 5px 10px;
+  margin-top: 10px;
+  }
