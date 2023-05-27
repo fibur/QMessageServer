@@ -6,7 +6,7 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(Qt5 5.15 REQUIRED COMPONENTS Core Network WebSockets)
+find_package(Qt5 5.15 REQUIRED COMPONENTS Core Network WebSockets Sql)
 
 file(GLOB_RECURSE SOURCES *.cpp)
 file(GLOB_RECURSE HEADERS *.h)
@@ -31,7 +31,7 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
 )
 
 target_link_libraries(${PROJECT_NAME}
-    PRIVATE Qt5::Core Qt5::Network Qt5::WebSockets
+    PRIVATE Qt5::Core Qt5::Network Qt5::WebSockets Qt5::Sql
 )
 
 install(TARGETS ${PROJECT_NAME} DESTINATION "${CMAKE_SOURCE_DIR}/bin/${CMAKE_BUILD_TYPE}")

@@ -1,5 +1,7 @@
 #include "ChatServer.h"
 #include "HttpServer.h"
+#include "User.h"
+#include "UserManager.h"
 
 #include <QWebSocket>
 #include <QJsonDocument>
@@ -9,6 +11,7 @@
 
 ChatServer::ChatServer(QObject *parent)
     : QObject(parent)
+    , m_userManager(new UserManager(this))
 {
 }
 
@@ -36,6 +39,9 @@ void ChatServer::start(quint16 port)
         qCritical() << "Couldn't start chat server on port" << port;
         throw std::runtime_error(m_webSocketServer.errorString().toStdString());
     }
+
+    m_userManager->loadUsers();
+    connect(m_userManager, &UserManager::activeUsersChanged, this, &ChatServer::sendUserListChange);
 }
 
 void ChatServer::onNewConnection() {
@@ -49,77 +55,58 @@ void ChatServer::onNewConnection() {
         if (action == "authenticate") {
             const auto token = request["token"].toString();
             response["event"] = "authentication";
-            auto user = findUserByToken(token);
-
-            if (!user) {
-                user = findOfflineUserByToken(token);
-            }
+            auto user = m_userManager->findUserByToken(token);
 
             response["valid"] = (user != nullptr);
             if (user) {
-                user->socket = socket;
-                m_users[user->name] = *user;
-                m_offlineUsers.removeOne(*user);
+                m_userManager->authorizeUser(user, socket);
             }
 
             socket->sendTextMessage(QString::fromUtf8(QJsonDocument(response).toJson(QJsonDocument::Compact)));
 
-            sendUserListChangeAndClear();
+            sendUserListChange();
         } else if (action == "logout") {
             const auto token = request["token"].toString();
-            const auto user = findUserByToken(token);
+            const auto user = m_userManager->findUserByToken(token);
             if (user) {
-                const auto name = user->name;
-                user->socket->close();
-                m_users.remove(name);
-                sendUserListChangeAndClear();
+                m_userManager->deauthorizeUser(user);
             }
         } else if (action == "login") {
             const auto name = request["name"].toString();
+            const auto passphrase = ""; // = request["passphrase"].toString(); // TODO: implement this
             response["event"] = "login";
-            if (!m_users.contains(name)) {
-                const auto token = QUuid::createUuid().toString();
-                auto &userData = m_users[name];
-                userData.socket = socket;
-                userData.token = token;
-                userData.name = name;
-                userData.lastActive = QDateTime::currentDateTime();
 
-                connect(socket, &QWebSocket::disconnected, this, [this, name] {
-                    if (m_users.contains(name)) {
-                        m_offlineUsers << m_users[name];
-                        m_users.remove(name);
+            User* user = m_userManager->authenticateUser(name, passphrase);
+            if (user) {
+                m_userManager->authorizeUser(user, socket);
+                response["token"] = user->token();
+                response["username"] = user->name();
 
-                        sendUserListChangeAndClear();
-                    }
-                });
-
-                response["token"] = token;
-                response["username"] = name;
-
-                sendUserListChangeAndClear();
-                response["users"] = getUserListAsJsonObject();
+                sendUserListChange();
+                response["users"] = getUserListAsJsonObject(m_userManager->activeUsers());
 
                 socket->sendTextMessage(QString::fromUtf8(QJsonDocument(response).toJson()));
             } else {
                 response["valid"] = false;
-                response["error"] = "User already logged in";
+                response["error"] = "User or password is invalid.";
                 socket->sendTextMessage(QString::fromUtf8(QJsonDocument(response).toJson()));
             }
         } else {
             const auto token = request["token"].toString();
-            const auto user = findUserByToken(token);
+            const auto user = m_userManager->findUserByToken(token);
             if (user) {
-                user->lastActive = QDateTime::currentDateTime();
+                m_userManager->authorizeUser(user);
                 if (action == "message") {
-                    const auto target = request["target"].toString();
+                    const auto targetName = request["target"].toString();
                     const auto message = request["message"].toString();
-                    if (m_users.contains(target)) {
+
+                    User* targetUser = m_userManager->findActiveUserByName(targetName);
+                    if (targetUser) {
                         response["event"] = "messageEvent";
-                        response["sender"] = user->name;
+                        response["sender"] = user->name();
                         response["message"] = message;
 
-                        m_users[target].socket->sendTextMessage(QString::fromUtf8(QJsonDocument(response).toJson()));
+                        targetUser->socket()->sendTextMessage(QString::fromUtf8(QJsonDocument(response).toJson()));
                     }
                 }
             } else {
@@ -130,87 +117,27 @@ void ChatServer::onNewConnection() {
     });
 }
 
-ChatServer::UserData *ChatServer::findUserByToken(const QString &token) {
-    const auto now = QDateTime::currentDateTime();
-    for (auto &userData : m_users) {
-        if (userData.token == token) {
-            if (now.toSecsSinceEpoch() - userData.lastActive.toSecsSinceEpoch() <= 600) {
-                return &userData;
-            } else {
-                userData.socket->close();
-                m_users.remove(userData.name);
-                break;
-            }
-        }
-    }
-    return nullptr;
-}
-
-ChatServer::UserData *ChatServer::findOfflineUserByToken(const QString &token) {
-    const auto now = QDateTime::currentDateTime();
-    for (int i = 0; i < m_offlineUsers.length(); i++) {
-        auto &userData = m_offlineUsers[i];
-        if (userData.token == token) {
-            if (now.toSecsSinceEpoch() - userData.lastActive.toSecsSinceEpoch() <= 600) {
-                return &userData;
-            } else {
-                m_offlineUsers.removeAt(i);
-                break;
-            }
-        }
-    }
-    return nullptr;
-}
-
-QJsonArray ChatServer::getUserListAsJsonObject() {
+QJsonArray ChatServer::getUserListAsJsonObject(const QList<User*>& list) {
     QJsonArray userArray;
-    const auto now = QDateTime::currentDateTime();
-    QStringList toRemove;
 
-    for (const auto &userdata : qAsConst(m_users)) {
-        if (now.toSecsSinceEpoch() - userdata.lastActive.toSecsSinceEpoch() <= 600) {
-            userArray.append(userdata.name);
-        } else {
-            if (userdata.socket) {
-                QJsonObject response;
-                response["event"] = "userInvalid";
-                userdata.socket->sendTextMessage(QString::fromUtf8(QJsonDocument(response).toJson()));
-                userdata.socket->close();
-            }
-            toRemove << userdata.name;
-        }
-    }
-
-    for (const auto &user : qAsConst(toRemove)) {
-        m_users.remove(user);
+    for (const auto &user : list) {
+        userArray.append(user->name());
     }
 
     return userArray;
 }
 
-void ChatServer::sendUserListChangeAndClear() {
-    QJsonArray userArray = getUserListAsJsonObject();
+void ChatServer::sendUserListChange() {
+    const auto &activeUsers = m_userManager->activeUsers();
+    QJsonArray userArray = getUserListAsJsonObject(activeUsers);
 
     QJsonObject response;
     response["event"] = "userlistChange";
     response["users"] = userArray;
 
-    const auto &values = m_users.values();
-    for (const auto &user : values) {
-        if (user.socket) {
-            user.socket->sendTextMessage(QString::fromUtf8(QJsonDocument(response).toJson()));
+    for (const auto &user : activeUsers) {
+        if (user->socket()) {
+            user->socket()->sendTextMessage(QString::fromUtf8(QJsonDocument(response).toJson()));
         }
     }
-
-    const auto now = QDateTime::currentDateTime();
-    for (int i = 0; i < m_offlineUsers.length(); i++) {
-        if (now.toSecsSinceEpoch() - m_offlineUsers[i].lastActive.toSecsSinceEpoch() > 600) {
-            m_offlineUsers.removeAt(i);
-            i--;
-        }
-    }
-}
-
-bool ChatServer::UserData::operator ==(const UserData &other) {
-    return other.name == name;
 }

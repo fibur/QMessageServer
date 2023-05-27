@@ -5,6 +5,8 @@
 #include <QObject>
 #include <QWebSocketServer>
 
+class User;
+class UserManager;
 class HttpServer;
 class QWebSocket;
 
@@ -22,28 +24,13 @@ private slots:
     void onNewConnection();
 
 private:
-    struct UserData {
-        QString name;
-        QWebSocket *socket;
-        QString token;
-        QDateTime lastActive;
-
-        bool operator == (const UserData &other);
-    };
-
     HttpServer *m_httpServer = nullptr;
+    QJsonArray getUserListAsJsonObject(const QList<User *> &list);
 
-    UserData *findUserByToken(const QString &token);
-
-    UserData *findOfflineUserByToken(const QString &token);
-
-    QJsonArray getUserListAsJsonObject();
-
-    void sendUserListChangeAndClear();
+    void sendUserListChange();
 
     QWebSocketServer m_webSocketServer{ QStringLiteral("Chat Server"), QWebSocketServer::NonSecureMode };
-    QMap<QString, UserData> m_users;
-    QList<UserData> m_offlineUsers;
+    UserManager *m_userManager = nullptr;
 };
 
 
