@@ -18,7 +18,7 @@ public:
     explicit ChatServer(QObject *parent = nullptr);
 
 public slots:
-    void start(quint16 port = 12345);
+    void start(const QString &ip, int httpPort, quint16 port = 12345);
 
 private slots:
     void onNewConnection();

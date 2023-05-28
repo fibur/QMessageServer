@@ -102,11 +102,7 @@ void HttpServer::serveFile(QTcpSocket *socket, const QString &fileName, const QS
 
     QString fileContents = file.readAll();
 
-#ifdef QT_DEBUG
-    fileContents.replace("%SERVER_ADDRESS%", "localhost");
-#else
     fileContents.replace("%SERVER_ADDRESS%", m_chatServerAddress);
-#endif
 
     fileContents.replace("%SERVER_PORT%", QString::number(m_chatServerPort));
     sendResponse(socket, "200 OK", contentType.toUtf8(), fileContents.toUtf8());
