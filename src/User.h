@@ -10,15 +10,15 @@ class User : public QObject {
     Q_OBJECT
 
 public:
-    explicit User(const QString &id, const QString &name, const QString &passphrase, QObject* parent = nullptr);
+    explicit User(const QString &id, const QString &name, const QString &password, QObject* parent = nullptr);
 
     QString id() const;
 
     QString name() const;
     void setName(const QString &name);
 
-    QString password() const;
-    void setPassword(const QString &password);
+    QString publicKey() const;
+    void setPublicKey(const QString &password);
 
     QString token() const;
     void setToken(const QString &token);
@@ -28,6 +28,9 @@ public:
 
     QWebSocket *socket() const;
     void setSocket(QWebSocket *socket);
+
+    QString password() const;
+    void setPassword(const QString &password);
 
 signals:
     void userDisconnected();
@@ -39,6 +42,7 @@ private:
     QString m_id = "";
     QString m_name = "";
     QString m_password = "";
+    QString m_publicKey = "";
 
     QString m_token = "";
     QDateTime m_lastActive;

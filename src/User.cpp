@@ -1,11 +1,11 @@
 #include "User.h"
 #include <QWebSocket>
 
-User::User(const QString &id, const QString &name, const QString &passphrase, QObject *parent)
+User::User(const QString &id, const QString &name, const QString &password, QObject *parent)
     : QObject{parent}
     , m_id(id)
     , m_name(name)
-    , m_password(passphrase)
+    , m_password(password)
 {
 
 }
@@ -20,14 +20,14 @@ QString User::name() const
     return m_name;
 }
 
-QString User::password() const
+QString User::publicKey() const
 {
-    return m_password;
+    return m_publicKey;
 }
 
-void User::setPassword(const QString &password)
+void User::setPublicKey(const QString &publicKey)
 {
-    m_password = password;
+    m_publicKey = publicKey;
 }
 
 QString User::token() const
@@ -73,6 +73,16 @@ void User::onSocketDisconnected()
 {
     m_socket = nullptr;
     emit userDisconnected();
+}
+
+QString User::password() const
+{
+    return m_password;
+}
+
+void User::setPassword(const QString &password)
+{
+    m_password = password;
 }
 
 void User::setName(const QString &name)

@@ -22,6 +22,7 @@ public slots:
 
 private slots:
     void onNewConnection();
+    void handleMessage(const QString &message, QWebSocket *socket);
 
 private:
     HttpServer *m_httpServer = nullptr;

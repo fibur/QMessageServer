@@ -1,5 +1,7 @@
 const serverAddress = "ws://%SERVER_ADDRESS%:%SERVER_PORT%";
 
+let publicKey = "";
+let privateKey = "";
 let myName = null;
 let socket = null;
 let token = null;
@@ -11,10 +13,35 @@ let unreadMessages = {};
 init();
 
 function login() {
+  document.getElementById("formError").innerHTML = "";
   const username = document.getElementById("username").value;
-  if (username && socket) {
-    socket.send(JSON.stringify({ action: "login", name: username }));
+  const password = hashPassword(document.getElementById("password").value);
+  const register = document.getElementById("registerCheckbox").checked;
+  const confirmPassword = hashPassword(document.getElementById("confirmPassword").value);
+
+  if (username === "" || password === "" || (register && confirmPassword === "")) {
+      document.getElementById("formError").innerHTML = "Please fill in all fields.";
+      return;
   }
+
+  if (register && password !== confirmPassword) {
+      document.getElementById("formError").innerHTML = "Passwords do not match.";
+      return;
+  }
+
+  showLoadingIndicator();
+
+  generateRSAKeys(username, password).then((keypair) => {
+    if (username && socket) {
+      privateKey = keypair.prvKeyObj;
+      publicKey = keypair.pubKeyObj;
+      socket.send(JSON.stringify({ action: register ? Requests.RegisterRequest : Requests.LoginRequest, name: username , password: password, pubKey: publicKey}));
+    }
+  }).catch((error) => {
+    console.error(error);
+  }).finally(() => {
+    hideLoadingIndicator();
+  });
 }
 
 function displayUsers() {
@@ -77,7 +104,7 @@ function sendMessage() {
       return;
     }
 
-    socket.send(JSON.stringify({ action: "message", token: token, target: currentUser, message: message }));
+    socket.send(JSON.stringify({ action: Requests.MessageRequest, token: token, target: currentUser, message: message }));
     const messageHistoryDiv = document.getElementById("messageHistory");
     const messageDiv = document.createElement("div");
     messageDiv.textContent = "You: " + message;
@@ -96,8 +123,8 @@ function sendMessage() {
 
 function logout() {
   if (socket && token) {
-    socket.send(JSON.stringify({ action: "logout", token: token }));
-    document.cookie = "token=; expires=Thu, 01 Jan 1970 00:00:00 UTC";
+    socket.send(JSON.stringify({ action: Requests.LogoutRequests, token: token }));
+    sessionStorage.clear();
     document.getElementById("loginForm").style.display = "block";
     document.getElementById("chat").style.display = "none";
     socket = null
@@ -145,12 +172,14 @@ function init() {
   socket = new WebSocket(serverAddress);
   socket.onmessage = handleServerMessage;
 
-  const storedToken = document.cookie.replace(/(?:(?:^|.*;\s*)token\s*\=\s*([^;]*).*$)|^.*$/, "$1");
-  if (storedToken) {
-    myName = document.cookie.replace(/(?:(?:^|.*;\s*)name\s*\=\s*([^;]*).*$)|^.*$/, "$1");
+  const storedToken = sessionStorage.getItem("token");
+  if (!!storedToken) {
+    myName = sessionStorage.getItem("name");
+    publicKey = sessionStorage.getItem("pubKey");
+    privateKey = sessionStorage.getItem("prvKey");
     token = storedToken;
     socket.onopen = () => {
-      socket.send(JSON.stringify({ action: "authenticate", token: token }));
+      socket.send(JSON.stringify({ action: Requests.AuthorizeRequest, token: token }));
     };
 
     socket.onerror = () => {
@@ -173,12 +202,16 @@ function handleLogin(data) {
   if (data.valid) {
     token = data.token;
     myName = data.username;
-    document.cookie = "token=" + token;
-    document.cookie = "name=" + myName;
+
+    sessionStorage.setItem("token", token);
+    sessionStorage.setItem("name", token);
+    sessionStorage.setItem("pubKey", publicKey);
+    sessionStorage.setItem("prvKey", privateKey);
+
     document.getElementById("loginForm").style.display = "none";
     document.getElementById("chat").style.display = "block";
   } else {
-    document.getElementById("loginError").textContent = data.error;
+    document.getElementById("formError").textContent = data.error;
   }
 }
 
@@ -205,25 +238,70 @@ function handleUserlistChange(data) {
 function handleServerMessage(event) {
   const data = JSON.parse(event.data);
   switch(data.event) {
-  case "userInvalid":
+  case Responses.InvalidUserEvent:
     logout();
     break;
-  case "authentication":
+  case Responses.AuthorizationEvent:
     handleAuth(data);
     handleUserlistChange(data);
     break;
-  case "login":
+  case Responses.LoginEvent:
     handleLogin(data);
     handleUserlistChange(data);
     break;
-  case "messageEvent":
+  case Responses.MessageEvent:
     handleMessage(data);
     break;
-  case "userlistChange":
+  case Responses.UserlistChangeEvent:
     handleUserlistChange(data);
     break;
   default:
     console.warn("Unknown message type", data.event, data);
     break;
+  }
+}
+
+function hashPassword(password) {
+  var sha256 = new KJUR.crypto.MessageDigest({ alg: "sha256", prov: "cryptojs" });
+  sha256.updateString(password);
+  var hashValue = sha256.digest();
+  return hashValue;
+}
+
+function generateRSAKeys(userName, hashedPassword) {
+  return new Promise((resolve, reject) => {
+    setTimeout(() => {
+      showLoadingIndicator();
+      setTimeout(() => {
+      var hash = KJUR.crypto.Util.hashString(userName + hashedPassword, "sha256");
+
+      var rsaKeypair = KEYUTIL.generateKeypair("RSA", 2048, hash);
+
+      resolve(rsaKeypair);
+      }, 10);
+    }, 0);
+  });
+}
+
+function showLoadingIndicator() {
+  document.getElementById('indicatorContainer').style.display = 'block';
+  document.getElementById('formControls').style.display = 'none';
+}
+
+function hideLoadingIndicator() {
+  document.getElementById('indicatorContainer').style.display = 'none';
+  document.getElementById('formControls').style.display = 'block';
+}
+
+function toggleRegisterFields() {
+  var registerCheckbox = document.getElementById("registerCheckbox");
+  var registerFields = document.getElementById("registerFields");
+  var formButton = document.getElementById("formButton");
+  if (registerCheckbox.checked) {
+      registerFields.style.display = "block";
+      formButton.innerHTML = "Register";
+  } else {
+    registerFields.style.display = "none";
+    formButton.innerHTML = "Login";
   }
 }
