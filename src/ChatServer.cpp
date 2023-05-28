@@ -15,22 +15,22 @@ ChatServer::ChatServer(QObject *parent)
 {
 }
 
-void ChatServer::start(quint16 port)
+void ChatServer::start(const QString &ip, int httpPort, quint16 port)
 {
     connect(&m_webSocketServer, &QWebSocketServer::newConnection, this, &ChatServer::onNewConnection);
     qDebug() << "Initiating chat server on port" << port;
     if (m_webSocketServer.listen(QHostAddress::Any, port)) {
-        qDebug() << "Chat server started, listening on" << m_webSocketServer.serverAddress() << ":" << m_webSocketServer.serverPort();
-        qDebug() << "Initiating HTTP server on port 8080...";
+        qDebug() << "Chat server started, listening on" << ip << ":" << m_webSocketServer.serverPort();
+        qDebug() << QString("Initiating HTTP server on port %1...").arg(httpPort);
 
         if (m_httpServer) {
             m_httpServer->deleteLater();
         }
 
-        m_httpServer = new HttpServer(QStringLiteral("77.237.28.186"), m_webSocketServer.serverPort(), this);
+        m_httpServer = new HttpServer(ip, m_webSocketServer.serverPort(), this);
 
-        if (m_httpServer->listen(QHostAddress::Any, 8080)) {
-            qDebug() << "HTTP server started, listening on" << m_httpServer->serverAddress() << ":" << m_httpServer->serverPort();
+        if (m_httpServer->listen(QHostAddress::Any, httpPort)) {
+            qDebug() << "HTTP server started, listening on" << ip << ":" << m_httpServer->serverPort();
         } else {
             qCritical() << "Couldn't start HTTP server on port" << port;
             throw std::runtime_error(m_httpServer->errorString().toStdString());
