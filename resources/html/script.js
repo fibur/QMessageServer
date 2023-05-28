@@ -35,7 +35,7 @@ function login() {
     if (username && socket) {
       privateKey = keypair.prvKeyObj;
       publicKey = keypair.pubKeyObj;
-      socket.send(JSON.stringify({ action: register ? Requests.RegisterRequest : Requests.LoginRequest, name: username , password: password, pubKey: publicKey}));
+      socket.send(JSON.stringify({ action: register ? Requests.RegisterRequest : Requests.LoginRequest, name: username , password: password, pubKey: KEYUTIL.getPEM(publicKey)}));
     }
   }).catch((error) => {
     console.error(error);
@@ -48,11 +48,11 @@ function displayUsers() {
   const userList = document.getElementById("userList");
   userList.innerHTML = "";
   for (const user of users) {
-    if (user !== myName) {
+    if (user.name !== myName) {
       const li = document.createElement("li");
-      li.textContent = user + (unreadMessages[user] > 0 ? " (" + unreadMessages[user] + ")" : "");
+      li.textContent = user.name + (unreadMessages[user.id] > 0 ? " (" + unreadMessages[user.id] + ")" : "");
       li.classList.add("user-item");
-      if (user === currentUser) {
+      if (!!currentUser && user.id === currentUser.id) {
         li.classList.add("selected");
       }
 
@@ -64,13 +64,12 @@ function displayUsers() {
       };
       li.onclick = () => {
         currentUser = user;
-        unreadMessages[user] = 0;
-
+        unreadMessages[user.id] = 0;
 
         const messageContainer = document.getElementById("messageHistory");
         messageContainer.innerHTML = "";
-        if (messageHistory[user]) {
-          for (const msg of messageHistory[user]) {
+        if (messageHistory[user.id]) {
+          for (const msg of messageHistory[user.id]) {
             const messageDiv = document.createElement("div");
             messageDiv.textContent = msg.sender === myName ? "You: " + msg.message : msg.sender + ": " + msg.message;
             if (msg.sender === myName) {
@@ -81,7 +80,7 @@ function displayUsers() {
             messageContainer.appendChild(messageDiv);
           }
         }
-        document.getElementById("messages").querySelector("h2").textContent = "Messages - " + currentUser;
+        document.getElementById("messages").querySelector("h2").textContent = "Messages - " + currentUser.name;
         displayUsers();
       };
 
@@ -98,13 +97,13 @@ function displayUsers() {
 
 function sendMessage() {
   const message = document.getElementById("message").value;
-  if (socket && token && currentUser && message) {
+  if (socket && token && message) {
     if (!currentUser) {
-      alert("Please select a user to chat with.");
+      alert("Please select an user to chat with.");
       return;
     }
 
-    socket.send(JSON.stringify({ action: Requests.MessageRequest, token: token, target: currentUser, message: message }));
+    socket.send(JSON.stringify({ action: Requests.MessageRequest, token: token, target: currentUser.id, message: message }));
     const messageHistoryDiv = document.getElementById("messageHistory");
     const messageDiv = document.createElement("div");
     messageDiv.textContent = "You: " + message;
@@ -113,11 +112,11 @@ function sendMessage() {
     messageHistoryDiv.appendChild(messageDiv);
     document.getElementById("message").value = "";
 
-    if (!messageHistory[currentUser]) {
-      messageHistory[currentUser] = [];
+    if (!messageHistory[currentUser.id]) {
+      messageHistory[currentUser.id] = [];
     }
 
-    messageHistory[currentUser].push({ sender: myName, message: message });
+    messageHistory[currentUser.id].push({ sender: myName, message: message });
   }
 }
 
@@ -135,16 +134,27 @@ function logout() {
   }
 }
 
+function findUserById(id) {
+  for (const user of users) {
+    if (user.id === id) {
+      return user;
+    }
+  }
+
+  return null;
+}
+
 function handleMessage(data) {
   if (data.sender && data.message) {
     if (!messageHistory[data.sender]) {
       messageHistory[data.sender] = [];
     }
-    messageHistory[data.sender].push({ sender: data.sender, message: data.message });
-    if (currentUser === data.sender) {
+
+    messageHistory[data.sender].push({ sender: findUserById(data.sender).name, message: data.message });
+    if (!!currentUser && currentUser.id === data.sender) {
       const messageHistory = document.getElementById("messageHistory");
       const messageDiv = document.createElement("div");
-      messageDiv.textContent = data.sender + ": " + data.message;
+      messageDiv.textContent = currentUser.name + ": " + data.message;
       messageDiv.classList.add("message");
       messageHistory.appendChild(messageDiv);
     } else {
@@ -204,7 +214,7 @@ function handleLogin(data) {
     myName = data.username;
 
     sessionStorage.setItem("token", token);
-    sessionStorage.setItem("name", token);
+    sessionStorage.setItem("name", myName);
     sessionStorage.setItem("pubKey", publicKey);
     sessionStorage.setItem("prvKey", privateKey);
 
@@ -217,8 +227,15 @@ function handleLogin(data) {
 
 function handleUserlistChange(data) {
   if (data.users) {
+    let found = false;
     for (const user in messageHistory) {
-      if (!data.users.includes(user)) {
+      for (const userData in data.users) {
+        if (userData.id === user) {
+          break
+        }
+      }
+
+      if (!found) {
         delete messageHistory[user];
         delete unreadMessages[user];
       }
@@ -226,8 +243,10 @@ function handleUserlistChange(data) {
 
     users = data.users;
     for (const user of users) {
-      if (!unreadMessages[user]) {
-        unreadMessages[user] = 0;
+      const userId = user.id;
+
+      if (!unreadMessages[userId]) {
+        unreadMessages[userId] = 0;
       }
     }
 

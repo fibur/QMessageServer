@@ -131,13 +131,13 @@ void ChatServer::handleMessage(const QString &message, QWebSocket* socket)
         const auto user = m_userManager->findUserByToken(token);
         if (user) {
             m_userManager->authorizeUser(user);
-            const auto targetName = request["target"].toString();
+            const auto targetId = request["target"].toString();
             const auto message = request["message"].toString();
 
-            User* targetUser = m_userManager->findActiveUserByName(targetName);
+            User* targetUser = m_userManager->findActiveUserById(targetId);
             if (targetUser) {
                 response["event"] = HttpServer::Responses::MessageEvent;
-                response["sender"] = user->name();
+                response["sender"] = user->id();
                 response["message"] = message;
 
                 targetUser->socket()->sendTextMessage(QString::fromUtf8(QJsonDocument(response).toJson()));
@@ -172,7 +172,13 @@ QJsonArray ChatServer::getUserListAsJsonObject(const QList<User*>& list) {
     QJsonArray userArray;
 
     for (const auto &user : list) {
-        userArray.append(user->name());
+        QJsonObject userObj;
+
+        userObj["id"] = user->id();
+        userObj["name"] = user->name();
+        userObj["publicKey"] = user->publicKey();
+
+        userArray.append(userObj);
     }
 
     return userArray;

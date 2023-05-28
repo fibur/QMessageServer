@@ -22,7 +22,7 @@ public:
     User *findUserByToken(const QString& token);
     User *findUserByName(const QString& name);
 
-    User *findActiveUserByName(const QString& name);
+    User *findActiveUserById(const QString& id);
 
     void deauthorizeUser(User *user);
     void authorizeUser(User *user, QWebSocket* socket = nullptr);

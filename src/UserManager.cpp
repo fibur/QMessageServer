@@ -101,12 +101,12 @@ User *UserManager::findUserByName(const QString &name)
     return *result;
 }
 
-User *UserManager::findActiveUserByName(const QString &name)
+User *UserManager::findActiveUserById(const QString &id)
 {
     const auto &activeUserList = activeUsers();
 
-    const auto result = std::find_if(activeUserList.begin(), activeUserList.end(), [&name](User* user){
-        if (user->name() == name) {
+    const auto result = std::find_if(activeUserList.begin(), activeUserList.end(), [&id](User* user){
+        if (user->id() == id) {
             return true;
         }
 
