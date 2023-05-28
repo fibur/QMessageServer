@@ -47,74 +47,125 @@ void ChatServer::start(quint16 port)
 void ChatServer::onNewConnection() {
     auto socket = m_webSocketServer.nextPendingConnection();
     connect(socket, &QWebSocket::textMessageReceived, this, [this, socket](const QString &message) {
-        const auto request = QJsonDocument::fromJson(message.toUtf8()).object();
-        const auto action = request["action"].toString();
-        QJsonObject response;
-        response["valid"] = true;
+        handleMessage(message, socket);
+    });
+}
 
-        if (action == "authenticate") {
-            const auto token = request["token"].toString();
-            response["event"] = "authentication";
-            auto user = m_userManager->findUserByToken(token);
+void ChatServer::handleMessage(const QString &message, QWebSocket* socket)
+{
+    const auto request = QJsonDocument::fromJson(message.toUtf8()).object();
+    const auto action = request["action"].toInt();
+    QJsonObject response;
+    response["valid"] = true;
 
-            response["valid"] = (user != nullptr);
-            if (user) {
-                m_userManager->authorizeUser(user, socket);
-            }
+    if (!m_httpServer->isValueInEnumRange(action, "Requests")) {
+        response["valid"] = false;
+        socket->sendTextMessage(QString::fromUtf8(QJsonDocument(response).toJson(QJsonDocument::Compact)));
+        return;
+    }
 
-            socket->sendTextMessage(QString::fromUtf8(QJsonDocument(response).toJson(QJsonDocument::Compact)));
+    HttpServer::Requests requestType = static_cast<HttpServer::Requests>(action);
 
-            sendUserListChange();
-        } else if (action == "logout") {
-            const auto token = request["token"].toString();
-            const auto user = m_userManager->findUserByToken(token);
-            if (user) {
-                m_userManager->deauthorizeUser(user);
-            }
-        } else if (action == "login") {
-            const auto name = request["name"].toString();
-            const auto passphrase = ""; // = request["passphrase"].toString(); // TODO: implement this
-            response["event"] = "login";
+    switch (requestType) {
 
-            User* user = m_userManager->authenticateUser(name, passphrase);
-            if (user) {
-                m_userManager->authorizeUser(user, socket);
-                response["token"] = user->token();
-                response["username"] = user->name();
+    case HttpServer::LoginRequest:
+    case HttpServer::RegisterRequest: {
+        const auto name = request["name"].toString();
+        const auto password = request["password"].toString();
+        response["event"] = HttpServer::Responses::LoginEvent;
 
-                sendUserListChange();
-                response["users"] = getUserListAsJsonObject(m_userManager->activeUsers());
+        if (name.isEmpty() || password.isEmpty()) {
+            response["valid"] = false;
+            response["error"] = "Please fill all fields.";
+            socket->sendTextMessage(QString::fromUtf8(QJsonDocument(response).toJson()));
 
-                socket->sendTextMessage(QString::fromUtf8(QJsonDocument(response).toJson()));
-            } else {
+            return;
+        }
+
+        User* user = nullptr;
+        if (requestType == HttpServer::RegisterRequest) {
+            if (!m_userManager->saveUser(name, password)) {
                 response["valid"] = false;
-                response["error"] = "User or password is invalid.";
+                response["error"] = "Username already exists.";
                 socket->sendTextMessage(QString::fromUtf8(QJsonDocument(response).toJson()));
+
+                return;
+            } else {
+                user = m_userManager->users().last();
             }
         } else {
-            const auto token = request["token"].toString();
-            const auto user = m_userManager->findUserByToken(token);
-            if (user) {
-                m_userManager->authorizeUser(user);
-                if (action == "message") {
-                    const auto targetName = request["target"].toString();
-                    const auto message = request["message"].toString();
+            user = m_userManager->authenticateUser(name, password);
+        }
 
-                    User* targetUser = m_userManager->findActiveUserByName(targetName);
-                    if (targetUser) {
-                        response["event"] = "messageEvent";
-                        response["sender"] = user->name();
-                        response["message"] = message;
+        if (user) {
+            m_userManager->authorizeUser(user, socket);
+            user->setPublicKey(request["pubKey"].toString());
 
-                        targetUser->socket()->sendTextMessage(QString::fromUtf8(QJsonDocument(response).toJson()));
-                    }
-                }
-            } else {
-                response["event"] = "userInvalid";
-                socket->sendTextMessage(QString::fromUtf8(QJsonDocument(response).toJson()));
+            response["token"] = user->token();
+            response["username"] = user->name();
+
+            sendUserListChange();
+            response["users"] = getUserListAsJsonObject(m_userManager->activeUsers());
+
+            socket->sendTextMessage(QString::fromUtf8(QJsonDocument(response).toJson()));
+        } else {
+            response["valid"] = false;
+            response["error"] = "User or password is invalid.";
+            socket->sendTextMessage(QString::fromUtf8(QJsonDocument(response).toJson()));
+        }
+
+        break;
+    }
+    case HttpServer::LogoutRequest: {
+        const auto token = request["token"].toString();
+        const auto user = m_userManager->findUserByToken(token);
+        if (user) {
+            m_userManager->deauthorizeUser(user);
+        }
+
+        break;
+    }
+
+    case HttpServer::MessageRequest: {
+        const auto token = request["token"].toString();
+        const auto user = m_userManager->findUserByToken(token);
+        if (user) {
+            m_userManager->authorizeUser(user);
+            const auto targetName = request["target"].toString();
+            const auto message = request["message"].toString();
+
+            User* targetUser = m_userManager->findActiveUserByName(targetName);
+            if (targetUser) {
+                response["event"] = HttpServer::Responses::MessageEvent;
+                response["sender"] = user->name();
+                response["message"] = message;
+
+                targetUser->socket()->sendTextMessage(QString::fromUtf8(QJsonDocument(response).toJson()));
             }
         }
-    });
+
+        break;
+    }
+    case HttpServer::AuthorizeRequest:{
+        const auto token = request["token"].toString();
+        response["event"] = HttpServer::Responses::AuthorizationEvent;
+        auto user = m_userManager->findUserByToken(token);
+
+        response["valid"] = (user != nullptr);
+        if (user) {
+            m_userManager->authorizeUser(user, socket);
+        } else {
+            response["event"] = HttpServer::Responses::InvalidUserEvent;
+            socket->sendTextMessage(QString::fromUtf8(QJsonDocument(response).toJson()));
+        }
+
+        socket->sendTextMessage(QString::fromUtf8(QJsonDocument(response).toJson(QJsonDocument::Compact)));
+
+        sendUserListChange();
+
+        break;
+    }
+    }
 }
 
 QJsonArray ChatServer::getUserListAsJsonObject(const QList<User*>& list) {
@@ -132,7 +183,7 @@ void ChatServer::sendUserListChange() {
     QJsonArray userArray = getUserListAsJsonObject(activeUsers);
 
     QJsonObject response;
-    response["event"] = "userlistChange";
+    response["event"] = HttpServer::Responses::UserlistChangeEvent;
     response["users"] = userArray;
 
     for (const auto &user : activeUsers) {

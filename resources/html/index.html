@@ -5,14 +5,28 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="style.css">
     <title>Chat</title>
+    <script src="jsrsasign-latest-all-min.js"></script>
 </head>
-<body>
     <div id="loginForm">
-        <input type="text" id="username" placeholder="Enter your username">
-        <button onclick="login()">Login</button>
-        <span id="loginError" style="color: red;"></span>
+        <input class="login-input" type="text" id="username" placeholder="Enter your username" required>
+        <input class="login-input" type="password" id="password" placeholder="Password" required>
+        <div id="registerFields" style="display: none;">
+            <input class="login-input" type="password" id="confirmPassword" placeholder="Confirm Password" required>
+        </div>
+        <div id="formControls">
+            <label>
+                Register
+                <input class="login-input" type="checkbox" id="registerCheckbox" onchange="toggleRegisterFields()">
+            </label>
+            <br>
+            <button id="formButton" onclick="login()">Login</button>
+            <span id="formError" style="color: red;"></span>
+        </div>
+        <label id="indicatorContainer" style="display: none;">
+            Creating keypair...
+            <div id="loadingIndicator"></div>
+        </label>
     </div>
-
     <div id="chat" style="display: none;">
         <div id="users">
             <h2>Users</h2>
@@ -28,6 +42,7 @@
             <button onclick="logout()">Logout</button>
         </div>
     </div>
+    <script src="enums.js"></script>
     <script src="script.js"></script>
 </body>
 </html>

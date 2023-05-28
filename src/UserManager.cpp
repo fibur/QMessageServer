@@ -6,6 +6,7 @@
 #include <QSqlQuery>
 #include <QVariant>
 #include <QRandomGenerator>
+#include <QSqlError>
 
 UserManager::UserManager(QObject *parent) : QObject(parent) {
     m_database = QSqlDatabase::addDatabase("QSQLITE");
@@ -31,7 +32,13 @@ void UserManager::loadUsers() {
     }
 }
 
-void UserManager::saveUser(const QString &name, const QString &password) {
+bool UserManager::saveUser(const QString &name, const QString &password) {
+    User *alreadyExisting = findUserByName(name);
+
+    if (alreadyExisting) {
+        return false;
+    }
+
     QString id = generateUniqueID();
 
     QSqlQuery query;
@@ -41,12 +48,18 @@ void UserManager::saveUser(const QString &name, const QString &password) {
     query.bindValue(":password", password);
     query.exec();
 
-    addUser(id, name, password);
+    if (query.lastError().type() == QSqlError::NoError) {
+        addUser(id, name, password);
+
+        return true;
+    }
+
+    return false;
 }
 
 User *UserManager::authenticateUser(const QString &name, const QString &password) {
     for (User* user : qAsConst(m_users)) {
-        if (user->name() == name/* && user->password() == hashedPassword*/) { // TODO implement password check
+        if (user->name() == name && user->password() == password) {
             return user;
         }
     }
@@ -58,6 +71,23 @@ User *UserManager::findUserByToken(const QString &token)
     deauthorizeInactiveUsers();
     const auto result = std::find_if(m_users.begin(), m_users.end(), [&token](User* user){
         if (user->token() == token) {
+            return true;
+        }
+
+        return false;
+    });
+
+    if (result == m_users.end()) {
+        return nullptr;
+    }
+
+    return *result;
+}
+
+User *UserManager::findUserByName(const QString &name)
+{
+    const auto result = std::find_if(m_users.begin(), m_users.end(), [&name](User* user){
+        if (user->name() == name) {
             return true;
         }
 
@@ -162,11 +192,11 @@ void UserManager::deauthorizeInactiveUsers()
     });
 }
 
-void UserManager::addUser(const QString &id, const QString &name, const QString &passphrase)
+void UserManager::addUser(const QString &id, const QString &name, const QString &publicKey)
 {
     User* user = new User(id,
                           name,
-                          passphrase,
+                          publicKey,
                           this);
     m_users.append(user);
 

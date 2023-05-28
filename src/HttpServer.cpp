@@ -5,12 +5,31 @@
 #include <QResource>
 #include <QTextCodec>
 #include <QFileInfo>
+#include <QMetaEnum>
 
 HttpServer::HttpServer(const QString &chatServerAddress, quint16 chatServerPort, QObject *parent)
     : QTcpServer(parent)
     , m_chatServerAddress(chatServerAddress)
     , m_chatServerPort(chatServerPort)
 {
+    generateEnumsFile();
+}
+
+bool HttpServer::isValueInEnumRange(int value, const QString &enumName)
+{
+    const QMetaObject* metaObj = &HttpServer::staticMetaObject;  // Replace "YourClass" with the appropriate class name
+
+    int enumIndex = metaObj->indexOfEnumerator(enumName.toLatin1());
+    if (enumIndex == -1) {
+        // Enum not found
+        return false;
+    }
+
+    QMetaEnum metaEnum = metaObj->enumerator(enumIndex);
+    int minValue = metaEnum.keyToValue(metaEnum.key(0));
+    int maxValue = metaEnum.keyToValue(metaEnum.key(metaEnum.keyCount() - 1));
+
+    return (value >= minValue && value <= maxValue);
 }
 
 void HttpServer::incomingConnection(qintptr socketDescriptor)
@@ -48,6 +67,10 @@ void HttpServer::handleRequest()
         serveFile(socket, ":/script.js", "text/javascript");
     } else if (method == "GET" && path == "/style.css") {
         serveFile(socket, ":/style.css", "text/css");
+    } else if (method == "GET" && path == "/jsrsasign-latest-all-min.js") {
+        serveFile(socket, ":/jsrsasign-latest-all-min.js", "text/css");
+    } else if (method == "GET" && path == "/enums.js") {
+        sendResponse(socket, "200 OK", "text/javascript", m_enumsJsFile.toUtf8());
     } else {
         sendResponse(socket, "404 Not Found", "text/plain", "Page not found");
     }
@@ -87,4 +110,32 @@ void HttpServer::serveFile(QTcpSocket *socket, const QString &fileName, const QS
 
     fileContents.replace("%SERVER_PORT%", QString::number(m_chatServerPort));
     sendResponse(socket, "200 OK", contentType.toUtf8(), fileContents.toUtf8());
+}
+
+void HttpServer::generateEnumsFile()
+{
+    m_enumsJsFile += convertEnumToJs("Requests");
+    m_enumsJsFile += convertEnumToJs("Responses");
+}
+
+QString HttpServer::convertEnumToJs(const QString &enumName)
+{
+    QString enumContents = "const %1 = {";
+
+    enumContents = enumContents.arg(enumName);
+    enumContents += "\n";
+
+    const QMetaObject &metaObj = HttpServer::staticMetaObject;
+    int enumIndex = metaObj.indexOfEnumerator(enumName.toStdString().c_str());
+    if (enumIndex != -1) {
+        QMetaEnum metaEnum = metaObj.enumerator(enumIndex);
+        for (int i = 0; i < metaEnum.keyCount(); ++i) {
+            QString enumValue = metaEnum.key(i);
+            enumContents += QString("%1: %2,\n").arg(enumValue).arg(i);
+        }
+    }
+
+    enumContents += "};\n";
+
+    return enumContents;
 }

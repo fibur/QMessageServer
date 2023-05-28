@@ -16,7 +16,7 @@ public:
     explicit UserManager(QObject *parent = nullptr);
 
     void loadUsers();
-    void saveUser(const QString& name, const QString& password);
+    bool saveUser(const QString& name, const QString& password);
 
     User *authenticateUser(const QString& name, const QString& password);
     User *findUserByToken(const QString& token);
@@ -40,7 +40,7 @@ private:
     QString generatePublicKey(const QString& username, const QString& hashedPassword);
 
     void deauthorizeInactiveUsers();
-    void addUser(const QString &id, const QString& name, const QString& passphrase);
+    void addUser(const QString &id, const QString& name, const QString& publicKey);
 
 private:
     QSqlDatabase m_database;
