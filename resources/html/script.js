@@ -30,7 +30,8 @@ function login() {
   }
 
   showLoadingIndicator();
-
+  
+  if (!privateKey || !publicKey) {
   generateRSAKeys(username, password).then((keypair) => {
     if (username && socket) {
       privateKey = keypair.prvKeyObj;
@@ -42,6 +43,9 @@ function login() {
   }).finally(() => {
     hideLoadingIndicator();
   });
+} else {
+  socket.send(JSON.stringify({ action: register ? Requests.RegisterRequest : Requests.LoginRequest, name: username , password: password, pubKey: KEYUTIL.getPEM(publicKey)}));
+}
 }
 
 function displayUsers() {
@@ -75,7 +79,7 @@ function displayUsers() {
             if (msg.sender === myName) {
               messageDiv.classList.add("message", "sent");
             } else {
-              messageDiv.classList.add("message");
+              messageDiv.classList.add("message", "received");
             }
             messageContainer.appendChild(messageDiv);
           }
@@ -96,27 +100,37 @@ function displayUsers() {
 }
 
 function sendMessage() {
-  const message = document.getElementById("message").value;
-  if (socket && token && message) {
+  const messageValue = document.getElementById("message").value;
+
+  if (socket && token && messageValue) {
     if (!currentUser) {
       alert("Please select an user to chat with.");
       return;
     }
 
-    socket.send(JSON.stringify({ action: Requests.MessageRequest, token: token, target: currentUser.id, message: message }));
+    var message = "Couldn't encrypt this message, reason:";
     const messageHistoryDiv = document.getElementById("messageHistory");
     const messageDiv = document.createElement("div");
-    messageDiv.textContent = "You: " + message;
-    messageDiv.classList.add("message", "sent");
 
-    messageHistoryDiv.appendChild(messageDiv);
-    document.getElementById("message").value = "";
+    try {
+      message = encryptMessage(currentUser.publicKey, messageValue); 
+      socket.send(JSON.stringify({ action: Requests.MessageRequest, token: token, target: currentUser.id, message: message }));
 
-    if (!messageHistory[currentUser.id]) {
-      messageHistory[currentUser.id] = [];
+      if (!messageHistory[currentUser.id]) {
+        messageHistory[currentUser.id] = [];
+      }
+  
+      messageHistory[currentUser.id].push({ sender: myName, message: messageValue });
+      messageDiv.classList.add("message", "sent");
+      message = messageValue;
+    } catch (exception) {
+      message += exception;
+      messageDiv.classList.add("message", "sent", "error");
     }
 
-    messageHistory[currentUser.id].push({ sender: myName, message: message });
+    messageDiv.textContent = "You: " + message;
+    messageHistoryDiv.appendChild(messageDiv);
+    document.getElementById("message").value = "";
   }
 }
 
@@ -150,12 +164,29 @@ function handleMessage(data) {
       messageHistory[data.sender] = [];
     }
 
-    messageHistory[data.sender].push({ sender: findUserById(data.sender).name, message: data.message });
+    const user = findUserById(data.sender);
+    if (!user) {
+      return;
+    }
+
+    let decryptedMessage = "Couldn't decrypt this message, reason:";
+    let error = false;
+    try {
+      decryptedMessage = decryptMessage(privateKey, data.message);
+      messageHistory[data.sender].push({ sender: user.name, message: decryptedMessage });
+    } catch (exception) {
+      decryptedMessage += exception;
+      error = true;
+    }
+    
     if (!!currentUser && currentUser.id === data.sender) {
       const messageHistory = document.getElementById("messageHistory");
       const messageDiv = document.createElement("div");
-      messageDiv.textContent = currentUser.name + ": " + data.message;
-      messageDiv.classList.add("message");
+      messageDiv.textContent = currentUser.name + ": " + decryptedMessage;
+      messageDiv.classList.add("message", "received");
+      if (error) {
+        messageDiv.classList.add("error");
+      }
       messageHistory.appendChild(messageDiv);
     } else {
       unreadMessages[data.sender]++;
@@ -191,12 +222,16 @@ function init() {
     socket.onopen = () => {
       socket.send(JSON.stringify({ action: Requests.AuthorizeRequest, token: token }));
     };
-
-    socket.onerror = () => {
-      alert("An error occurred. Please try again later.");
-      location.reload();
-    };
   }
+  
+  socket.onerror = () => {
+    alert("An error occurred. Please try again later.");
+    location.reload();
+  };
+
+  socket.onclose = () => {
+    location.reload();
+  };
 }
 
 function handleAuth(data) {
@@ -323,4 +358,14 @@ function toggleRegisterFields() {
     registerFields.style.display = "none";
     formButton.innerHTML = "Login";
   }
+}
+
+function decryptMessage(privateKey, plaintext) {
+  return privateKey.decrypt(plaintext);
+}
+
+function encryptMessage(publicKey, ciphertext) {
+  var rsaPublicKey = KEYUTIL.getKey(publicKey);
+  var encryptedMessage = rsaPublicKey.encrypt(ciphertext);
+  return encryptedMessage;
 }

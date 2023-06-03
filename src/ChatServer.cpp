@@ -98,6 +98,13 @@ void ChatServer::handleMessage(const QString &message, QWebSocket* socket)
         }
 
         if (user) {
+            if (!user->token().isEmpty()) {
+                user->setToken("");
+                if (user->socket()) {
+                    user->socket()->close();
+                }
+            }
+
             m_userManager->authorizeUser(user, socket);
             user->setPublicKey(request["pubKey"].toString());
 
