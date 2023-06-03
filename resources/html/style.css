@@ -93,6 +93,14 @@ body {
     background-color: #e6f7ff;
     text-align: right;
   }
+
+  .message.sent.error {
+    background-color: #ffcccc;
+  }
+
+  .message.received.error {
+    background-color: #ffcccc;
+  }
   
   .message.received {
     background-color: #f0f0f0;

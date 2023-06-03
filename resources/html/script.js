@@ -30,29 +30,33 @@ function login() {
   }
 
   showLoadingIndicator();
-
+  
+  if (!privateKey || !publicKey) {
   generateRSAKeys(username, password).then((keypair) => {
     if (username && socket) {
       privateKey = keypair.prvKeyObj;
       publicKey = keypair.pubKeyObj;
-      socket.send(JSON.stringify({ action: register ? Requests.RegisterRequest : Requests.LoginRequest, name: username , password: password, pubKey: publicKey}));
+      socket.send(JSON.stringify({ action: register ? Requests.RegisterRequest : Requests.LoginRequest, name: username , password: password, pubKey: KEYUTIL.getPEM(publicKey)}));
     }
   }).catch((error) => {
     console.error(error);
   }).finally(() => {
     hideLoadingIndicator();
   });
+} else {
+  socket.send(JSON.stringify({ action: register ? Requests.RegisterRequest : Requests.LoginRequest, name: username , password: password, pubKey: KEYUTIL.getPEM(publicKey)}));
+}
 }
 
 function displayUsers() {
   const userList = document.getElementById("userList");
   userList.innerHTML = "";
   for (const user of users) {
-    if (user !== myName) {
+    if (user.name !== myName) {
       const li = document.createElement("li");
-      li.textContent = user + (unreadMessages[user] > 0 ? " (" + unreadMessages[user] + ")" : "");
+      li.textContent = user.name + (unreadMessages[user.id] > 0 ? " (" + unreadMessages[user.id] + ")" : "");
       li.classList.add("user-item");
-      if (user === currentUser) {
+      if (!!currentUser && user.id === currentUser.id) {
         li.classList.add("selected");
       }
 
@@ -64,24 +68,23 @@ function displayUsers() {
       };
       li.onclick = () => {
         currentUser = user;
-        unreadMessages[user] = 0;
-
+        unreadMessages[user.id] = 0;
 
         const messageContainer = document.getElementById("messageHistory");
         messageContainer.innerHTML = "";
-        if (messageHistory[user]) {
-          for (const msg of messageHistory[user]) {
+        if (messageHistory[user.id]) {
+          for (const msg of messageHistory[user.id]) {
             const messageDiv = document.createElement("div");
             messageDiv.textContent = msg.sender === myName ? "You: " + msg.message : msg.sender + ": " + msg.message;
             if (msg.sender === myName) {
               messageDiv.classList.add("message", "sent");
             } else {
-              messageDiv.classList.add("message");
+              messageDiv.classList.add("message", "received");
             }
             messageContainer.appendChild(messageDiv);
           }
         }
-        document.getElementById("messages").querySelector("h2").textContent = "Messages - " + currentUser;
+        document.getElementById("messages").querySelector("h2").textContent = "Messages - " + currentUser.name;
         displayUsers();
       };
 
@@ -97,27 +100,37 @@ function displayUsers() {
 }
 
 function sendMessage() {
-  const message = document.getElementById("message").value;
-  if (socket && token && currentUser && message) {
+  const messageValue = document.getElementById("message").value;
+
+  if (socket && token && messageValue) {
     if (!currentUser) {
-      alert("Please select a user to chat with.");
+      alert("Please select an user to chat with.");
       return;
     }
 
-    socket.send(JSON.stringify({ action: Requests.MessageRequest, token: token, target: currentUser, message: message }));
+    var message = "Couldn't encrypt this message, reason:";
     const messageHistoryDiv = document.getElementById("messageHistory");
     const messageDiv = document.createElement("div");
-    messageDiv.textContent = "You: " + message;
-    messageDiv.classList.add("message", "sent");
 
-    messageHistoryDiv.appendChild(messageDiv);
-    document.getElementById("message").value = "";
+    try {
+      message = encryptMessage(currentUser.publicKey, messageValue); 
+      socket.send(JSON.stringify({ action: Requests.MessageRequest, token: token, target: currentUser.id, message: message }));
 
-    if (!messageHistory[currentUser]) {
-      messageHistory[currentUser] = [];
+      if (!messageHistory[currentUser.id]) {
+        messageHistory[currentUser.id] = [];
+      }
+  
+      messageHistory[currentUser.id].push({ sender: myName, message: messageValue });
+      messageDiv.classList.add("message", "sent");
+      message = messageValue;
+    } catch (exception) {
+      message += exception;
+      messageDiv.classList.add("message", "sent", "error");
     }
 
-    messageHistory[currentUser].push({ sender: myName, message: message });
+    messageDiv.textContent = "You: " + message;
+    messageHistoryDiv.appendChild(messageDiv);
+    document.getElementById("message").value = "";
   }
 }
 
@@ -135,17 +148,45 @@ function logout() {
   }
 }
 
+function findUserById(id) {
+  for (const user of users) {
+    if (user.id === id) {
+      return user;
+    }
+  }
+
+  return null;
+}
+
 function handleMessage(data) {
   if (data.sender && data.message) {
     if (!messageHistory[data.sender]) {
       messageHistory[data.sender] = [];
     }
-    messageHistory[data.sender].push({ sender: data.sender, message: data.message });
-    if (currentUser === data.sender) {
+
+    const user = findUserById(data.sender);
+    if (!user) {
+      return;
+    }
+
+    let decryptedMessage = "Couldn't decrypt this message, reason:";
+    let error = false;
+    try {
+      decryptedMessage = decryptMessage(privateKey, data.message);
+      messageHistory[data.sender].push({ sender: user.name, message: decryptedMessage });
+    } catch (exception) {
+      decryptedMessage += exception;
+      error = true;
+    }
+    
+    if (!!currentUser && currentUser.id === data.sender) {
       const messageHistory = document.getElementById("messageHistory");
       const messageDiv = document.createElement("div");
-      messageDiv.textContent = data.sender + ": " + data.message;
-      messageDiv.classList.add("message");
+      messageDiv.textContent = currentUser.name + ": " + decryptedMessage;
+      messageDiv.classList.add("message", "received");
+      if (error) {
+        messageDiv.classList.add("error");
+      }
       messageHistory.appendChild(messageDiv);
     } else {
       unreadMessages[data.sender]++;
@@ -181,12 +222,16 @@ function init() {
     socket.onopen = () => {
       socket.send(JSON.stringify({ action: Requests.AuthorizeRequest, token: token }));
     };
-
-    socket.onerror = () => {
-      alert("An error occurred. Please try again later.");
-      location.reload();
-    };
   }
+  
+  socket.onerror = () => {
+    alert("An error occurred. Please try again later.");
+    location.reload();
+  };
+
+  socket.onclose = () => {
+    location.reload();
+  };
 }
 
 function handleAuth(data) {
@@ -204,7 +249,7 @@ function handleLogin(data) {
     myName = data.username;
 
     sessionStorage.setItem("token", token);
-    sessionStorage.setItem("name", token);
+    sessionStorage.setItem("name", myName);
     sessionStorage.setItem("pubKey", publicKey);
     sessionStorage.setItem("prvKey", privateKey);
 
@@ -217,8 +262,15 @@ function handleLogin(data) {
 
 function handleUserlistChange(data) {
   if (data.users) {
+    let found = false;
     for (const user in messageHistory) {
-      if (!data.users.includes(user)) {
+      for (const userData in data.users) {
+        if (userData.id === user) {
+          break
+        }
+      }
+
+      if (!found) {
         delete messageHistory[user];
         delete unreadMessages[user];
       }
@@ -226,8 +278,10 @@ function handleUserlistChange(data) {
 
     users = data.users;
     for (const user of users) {
-      if (!unreadMessages[user]) {
-        unreadMessages[user] = 0;
+      const userId = user.id;
+
+      if (!unreadMessages[userId]) {
+        unreadMessages[userId] = 0;
       }
     }
 
@@ -304,4 +358,14 @@ function toggleRegisterFields() {
     registerFields.style.display = "none";
     formButton.innerHTML = "Login";
   }
+}
+
+function decryptMessage(privateKey, plaintext) {
+  return privateKey.decrypt(plaintext);
+}
+
+function encryptMessage(publicKey, ciphertext) {
+  var rsaPublicKey = KEYUTIL.getKey(publicKey);
+  var encryptedMessage = rsaPublicKey.encrypt(ciphertext);
+  return encryptedMessage;
 }
