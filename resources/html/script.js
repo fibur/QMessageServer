@@ -1,4 +1,4 @@
-const serverAddress = "ws://%SERVER_ADDRESS%:%SERVER_PORT%";
+const serverAddress = "%SERVER_PROTOCOL%://%SERVER_ADDRESS%:%SERVER_PORT%";
 
 let publicKey = "";
 let privateKey = "";

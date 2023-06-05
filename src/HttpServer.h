@@ -1,6 +1,7 @@
 #ifndef HTTPSERVER_H
 #define HTTPSERVER_H
 
+#include <QSslConfiguration>
 #include <QTcpServer>
 
 class HttpServer : public QTcpServer
@@ -31,6 +32,9 @@ public:
 
     bool isValueInEnumRange(int value, const QString& enumName);
 
+    // purposefully passing by copy
+    void setSslConfiguration(QSslConfiguration sslConfiguration);
+
 protected:
     void incomingConnection(qintptr socketDescriptor) override;
 
@@ -45,6 +49,8 @@ private:
     QString m_chatServerAddress = "";
     quint16 m_chatServerPort = 0;
     QString m_enumsJsFile = "";
+
+    QSslConfiguration m_sslConfiguration;
 };
 
 #endif // HTTPSERVER_H

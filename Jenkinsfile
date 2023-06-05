@@ -19,7 +19,7 @@ pipeline {
                     dir('build') {
                         sh 'cmake --install .'
                     }
-		    sh "JENKINS_NODE_COOKIE=dontKillMe /data/data/com.termux/files/home/jenkins/run_server.sh --ip 77.237.28.186"
+		    sh "JENKINS_NODE_COOKIE=dontKillMe /data/data/com.termux/files/home/jenkins/run_server.sh"
                 }
             }
         }
