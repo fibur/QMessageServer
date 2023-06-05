@@ -3,11 +3,14 @@
 #include "User.h"
 #include "UserManager.h"
 
+#include <QWebSocketServer>
 #include <QWebSocket>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
 #include <stdexcept>
+#include <QFile>
+#include <QSslKey>
 
 ChatServer::ChatServer(QObject *parent)
     : QObject(parent)
@@ -15,19 +18,70 @@ ChatServer::ChatServer(QObject *parent)
 {
 }
 
+void ChatServer::setupSSL(const QString &sslCertificate, const QString &sslPrivateKey)
+{
+    QFile certificateFile(sslCertificate);
+    if (certificateFile.open(QFile::OpenModeFlag::ReadOnly)) {
+        QSslCertificate certificate(&certificateFile);
+
+        QFile privateKeyFile(sslPrivateKey);
+        if (privateKeyFile.open(QFile::OpenModeFlag::ReadOnly)) {
+            QSslKey privateKey(&privateKeyFile, QSsl::Ec, QSsl::Pem, QSsl::PrivateKey);
+
+            m_sslConfiguration = QSslConfiguration();
+            m_sslConfiguration.setLocalCertificate(certificate);
+            m_sslConfiguration.setPrivateKey(privateKey);
+
+            privateKeyFile.close();
+
+            qDebug() << "Cert file valid:" << !certificate.isNull();
+            qDebug() << "Private key valid:" << !privateKey.isNull();
+        } else {
+            qWarning() << "Couldn't load the SSH certificate file on path" << sslCertificate;
+            qWarning() << "Reason:" << privateKeyFile.errorString();
+        }
+
+        certificateFile.close();
+    } else {
+        qWarning() << "Couldn't load the SSH certificate file on path" << sslCertificate;
+        qWarning() << "Reason:" << certificateFile.errorString();
+    }
+}
+
 void ChatServer::start(const QString &ip, int httpPort, quint16 port)
 {
-    connect(&m_webSocketServer, &QWebSocketServer::newConnection, this, &ChatServer::onNewConnection);
+
     qDebug() << "Initiating chat server on port" << port;
-    if (m_webSocketServer.listen(QHostAddress::Any, port)) {
-        qDebug() << "Chat server started, listening on" << ip << ":" << m_webSocketServer.serverPort();
+    if (!m_sslConfiguration.isNull()) {
+        m_webSocketServer = new QWebSocketServer(QStringLiteral("Chat Server"), QWebSocketServer::SecureMode, this);
+        qDebug() << "SSL configuration loaded, running on secure connection";
+
+        m_sslConfiguration.setPeerVerifyMode(QSslSocket::VerifyNone);
+        m_sslConfiguration.setProtocol(QSsl::TlsV1SslV3);
+
+        m_webSocketServer->setSslConfiguration(m_sslConfiguration);
+        connect(m_webSocketServer, &QWebSocketServer::sslErrors, this, [this](const QList<QSslError> &errors) {
+            for (const auto &error : errors) {
+                qWarning() << error;
+            }
+        });
+    } else {
+        m_webSocketServer = new QWebSocketServer(QStringLiteral("Chat Server"), QWebSocketServer::NonSecureMode, this);
+    }
+
+    connect(m_webSocketServer, &QWebSocketServer::newConnection, this, &ChatServer::onNewConnection);
+    if (m_webSocketServer->listen(QHostAddress::Any, port)) {
+        qDebug() << "Chat server started, listening on" << ip << ":" << m_webSocketServer->serverPort();
         qDebug() << QString("Initiating HTTP server on port %1...").arg(httpPort);
 
         if (m_httpServer) {
             m_httpServer->deleteLater();
         }
 
-        m_httpServer = new HttpServer(ip, m_webSocketServer.serverPort(), this);
+        m_httpServer = new HttpServer(ip, m_webSocketServer->serverPort(), this);
+        if (!m_sslConfiguration.isNull()) {
+            m_httpServer->setSslConfiguration(m_sslConfiguration);
+        }
 
         if (m_httpServer->listen(QHostAddress::Any, httpPort)) {
             qDebug() << "HTTP server started, listening on" << ip << ":" << m_httpServer->serverPort();
@@ -37,7 +91,7 @@ void ChatServer::start(const QString &ip, int httpPort, quint16 port)
         }
     } else {
         qCritical() << "Couldn't start chat server on port" << port;
-        throw std::runtime_error(m_webSocketServer.errorString().toStdString());
+        throw std::runtime_error(m_webSocketServer->errorString().toStdString());
     }
 
     m_userManager->loadUsers();
@@ -45,7 +99,8 @@ void ChatServer::start(const QString &ip, int httpPort, quint16 port)
 }
 
 void ChatServer::onNewConnection() {
-    auto socket = m_webSocketServer.nextPendingConnection();
+    auto socket = m_webSocketServer->nextPendingConnection();
+
     connect(socket, &QWebSocket::textMessageReceived, this, [this, socket](const QString &message) {
         handleMessage(message, socket);
     });

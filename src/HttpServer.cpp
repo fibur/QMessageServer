@@ -17,11 +17,10 @@ HttpServer::HttpServer(const QString &chatServerAddress, quint16 chatServerPort,
 
 bool HttpServer::isValueInEnumRange(int value, const QString &enumName)
 {
-    const QMetaObject* metaObj = &HttpServer::staticMetaObject;  // Replace "YourClass" with the appropriate class name
+    const QMetaObject* metaObj = &HttpServer::staticMetaObject;
 
     int enumIndex = metaObj->indexOfEnumerator(enumName.toLatin1());
     if (enumIndex == -1) {
-        // Enum not found
         return false;
     }
 
@@ -34,21 +33,46 @@ bool HttpServer::isValueInEnumRange(int value, const QString &enumName)
 
 void HttpServer::incomingConnection(qintptr socketDescriptor)
 {
-    QTcpSocket *socket = new QTcpSocket(this);
-    socket->setSocketDescriptor(socketDescriptor);
+    if (!m_sslConfiguration.isNull()) {
+        QSslSocket *sslSocket = new QSslSocket(this);
 
-    connect(socket, &QTcpSocket::readyRead, this, &HttpServer::handleRequest);
+        if (sslSocket->setSocketDescriptor(socketDescriptor)) {
+            addPendingConnection(sslSocket);
+            connect(sslSocket, QOverload<const QList<QSslError>&>::of(&QSslSocket::sslErrors),
+                    [this, sslSocket](const QList<QSslError> &errors) {
+                        for (auto &err: errors) {
+                            qCritical() << err;
+                        }
+                    });
+
+            sslSocket->setSslConfiguration(m_sslConfiguration);
+            connect(sslSocket, &QSslSocket::readyRead, this, &HttpServer::handleRequest);
+
+            connect(sslSocket, &QSslSocket::encrypted, this, [this, sslSocket]() {
+                connect(sslSocket, &QSslSocket::readyRead, this, &HttpServer::handleRequest);
+            });
+
+            sslSocket->startServerEncryption();
+        }
+    } else {
+        QTcpSocket* socket = new QTcpSocket(this);
+        if (socket->setSocketDescriptor(socketDescriptor)) {
+            addPendingConnection(socket);
+            connect(socket, &QTcpSocket::readyRead, this, &HttpServer::handleRequest);
+        }
+    }
 }
 
 void HttpServer::handleRequest()
 {
-    QTcpSocket *socket = qobject_cast<QTcpSocket *>(sender());
+    QTcpSocket *socket = qobject_cast<QTcpSocket*>(sender());
     if (!socket) {
         return;
     }
 
     QByteArray requestData = socket->readAll();
     QList<QByteArray> requestLines = requestData.split('\n');
+
     if (requestLines.isEmpty()) {
         return;
     }
@@ -102,6 +126,7 @@ void HttpServer::serveFile(QTcpSocket *socket, const QString &fileName, const QS
 
     QString fileContents = file.readAll();
 
+    fileContents.replace("%SERVER_PROTOCOL%", m_sslConfiguration.isNull() ? "ws" : "wss");
     fileContents.replace("%SERVER_ADDRESS%", m_chatServerAddress);
 
     fileContents.replace("%SERVER_PORT%", QString::number(m_chatServerPort));
@@ -134,4 +159,9 @@ QString HttpServer::convertEnumToJs(const QString &enumName)
     enumContents += "};\n";
 
     return enumContents;
+}
+
+void HttpServer::setSslConfiguration(QSslConfiguration sslConfiguration)
+{
+    m_sslConfiguration = sslConfiguration;
 }
