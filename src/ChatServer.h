@@ -8,6 +8,7 @@
 class User;
 class UserManager;
 class HttpServer;
+class HttpsServer;
 class QWebSocket;
 class QWebSocketServer;
 
@@ -21,7 +22,7 @@ public:
     void setupSSL(const QString &sslCertificate, const QString &sslPrivateKey);
 
 public slots:
-    void start(const QString &ip, int httpPort, quint16 port = 12345);
+    void start(const QString &ip, int httpPort, int httpsPort = 8443, quint16 port = 12345);
 
 private slots:
     void onNewConnection();
@@ -30,6 +31,7 @@ private slots:
 
 private:
     HttpServer *m_httpServer = nullptr;
+    HttpsServer *m_httpsServer = nullptr;
     QJsonArray getUserListAsJsonObject(const QList<User *> &list);
 
     QWebSocketServer *m_webSocketServer = nullptr;

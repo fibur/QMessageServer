@@ -14,20 +14,24 @@ int main(int argc, char *argv[]) {
                                             "Set the chat port.", "port", "12345");
     parser.addOption(chatServerPortOption);
 
-    QCommandLineOption httpServerPortOption(QStringList() << "httpServerPort" << "hsp" << "hp",
+    QCommandLineOption httpServerPortOption(QStringList() << "httpServerPort" << "httpPort" << "hp",
                                             "Set the HTTP server port.", "port", "8080");
     parser.addOption(httpServerPortOption);
+
+    QCommandLineOption httpsServerPortOption(QStringList() << "httpsServerPort" << "httpsPort" << "hsp",
+                                             "Set the HTTPS server port.", "port", "8443");
+    parser.addOption(httpsServerPortOption);
 
     QCommandLineOption serverIpOption(QStringList() << "serverIp" << "ip",
                                       "Set the server IP address.", "ip", "localhost");
 
     parser.addOption(serverIpOption);
     QCommandLineOption sslCertificateOption(QStringList() << "sslCertificate" << "sslcert",
-                                      "Set the server's SSL certificate,", "sslCertificate file", "");
+                                            "Set the server's SSL certificate,", "sslCertificate file", "");
 
     parser.addOption(sslCertificateOption);
     QCommandLineOption sslPrivateKeyOption(QStringList() << "sslPrivateKey" << "sslprvkey",
-                                      "Set the server IP address.", "sslPrivateKey file", "");
+                                           "Set the server IP address.", "sslPrivateKey file", "");
 
     parser.addOption(sslPrivateKeyOption);
 
@@ -35,18 +39,18 @@ int main(int argc, char *argv[]) {
 
     QString chatServerPort = parser.value(chatServerPortOption);
     QString httpServerPort = parser.value(httpServerPortOption);
+    QString httpsServerPort = parser.value(httpsServerPortOption);
     QString serverIp = parser.value(serverIpOption);
 
     QString sslCertificate = parser.value(sslCertificateOption);
     QString sslPrivateKey = parser.value(sslPrivateKeyOption);
-
 
     ChatServer server;
     if (!sslCertificate.isEmpty() && !sslPrivateKey.isEmpty()) {
         server.setupSSL(sslCertificate, sslPrivateKey);
     }
 
-    server.start(serverIp, httpServerPort.toInt(), chatServerPort.toInt());
+    server.start(serverIp, httpServerPort.toInt(), httpsServerPort.toInt(), chatServerPort.toInt());
 
     return app.exec();
 }

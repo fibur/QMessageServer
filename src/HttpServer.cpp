@@ -13,6 +13,8 @@ HttpServer::HttpServer(const QString &chatServerAddress, quint16 chatServerPort,
     , m_chatServerPort(chatServerPort)
 {
     generateEnumsFile();
+
+    connect(this, &QTcpServer::newConnection, this, &HttpServer::setupPendingSocket);
 }
 
 bool HttpServer::isValueInEnumRange(int value, const QString &enumName)
@@ -31,36 +33,9 @@ bool HttpServer::isValueInEnumRange(int value, const QString &enumName)
     return (value >= minValue && value <= maxValue);
 }
 
-void HttpServer::incomingConnection(qintptr socketDescriptor)
+void HttpServer::setChatServerProtocol(const QString &protocolString)
 {
-    if (!m_sslConfiguration.isNull()) {
-        QSslSocket *sslSocket = new QSslSocket(this);
-
-        if (sslSocket->setSocketDescriptor(socketDescriptor)) {
-            addPendingConnection(sslSocket);
-            connect(sslSocket, QOverload<const QList<QSslError>&>::of(&QSslSocket::sslErrors),
-                    [this, sslSocket](const QList<QSslError> &errors) {
-                        for (auto &err: errors) {
-                            qCritical() << err;
-                        }
-                    });
-
-            sslSocket->setSslConfiguration(m_sslConfiguration);
-            connect(sslSocket, &QSslSocket::readyRead, this, &HttpServer::handleRequest);
-
-            connect(sslSocket, &QSslSocket::encrypted, this, [this, sslSocket]() {
-                connect(sslSocket, &QSslSocket::readyRead, this, &HttpServer::handleRequest);
-            });
-
-            sslSocket->startServerEncryption();
-        }
-    } else {
-        QTcpSocket* socket = new QTcpSocket(this);
-        if (socket->setSocketDescriptor(socketDescriptor)) {
-            addPendingConnection(socket);
-            connect(socket, &QTcpSocket::readyRead, this, &HttpServer::handleRequest);
-        }
-    }
+    m_chatServerProtocol = protocolString;
 }
 
 void HttpServer::handleRequest()
@@ -70,33 +45,43 @@ void HttpServer::handleRequest()
         return;
     }
 
-    QByteArray requestData = socket->readAll();
-    QList<QByteArray> requestLines = requestData.split('\n');
+    if (!m_redirectTo.isEmpty()) {
+        static const QString &redirectResponse = QStringLiteral("HTTP/1.1 301 Moved Permanently\r\n"
+                                                                "Location: %1\r\n"
+                                                                "Connection: close\r\n\r\n");
 
-    if (requestLines.isEmpty()) {
-        return;
-    }
+        socket->write(redirectResponse.arg(m_redirectTo).toUtf8());
 
-    QList<QByteArray> requestParts = requestLines.first().split(' ');
-    if (requestParts.length() != 3) {
-        return;
-    }
-
-    QByteArray method = requestParts[0];
-    QByteArray path = requestParts[1];
-
-    if (method == "GET" && (path == "/" || path == "/index.html")) {
-        serveFile(socket, ":/index.html", "text/html");
-    } else if (method == "GET" && path == "/script.js") {
-        serveFile(socket, ":/script.js", "text/javascript");
-    } else if (method == "GET" && path == "/style.css") {
-        serveFile(socket, ":/style.css", "text/css");
-    } else if (method == "GET" && path == "/jsrsasign-latest-all-min.js") {
-        serveFile(socket, ":/jsrsasign-latest-all-min.js", "text/css");
-    } else if (method == "GET" && path == "/enums.js") {
-        sendResponse(socket, "200 OK", "text/javascript", m_enumsJsFile.toUtf8());
+        socket->waitForBytesWritten();
     } else {
-        sendResponse(socket, "404 Not Found", "text/plain", "Page not found");
+        QByteArray requestData = socket->readAll();
+        QList<QByteArray> requestLines = requestData.split('\n');
+        if (requestLines.isEmpty()) {
+            return;
+        }
+
+        QList<QByteArray> requestParts = requestLines.first().split(' ');
+        if (requestParts.length() != 3) {
+            return;
+        }
+
+        QByteArray method = requestParts[0];
+        QByteArray path = requestParts[1];
+
+        if (method == "GET" && (path == "/" || path == "/index.html")) {
+            serveFile(socket, ":/index.html", "text/html");
+        } else if (method == "GET" && path == "/script.js") {
+            serveFile(socket, ":/script.js", "text/javascript");
+        } else if (method == "GET" && path == "/style.css") {
+            serveFile(socket, ":/style.css", "text/css");
+        } else if (method == "GET" && path == "/jsrsasign-latest-all-min.js") {
+            serveFile(socket, ":/jsrsasign-latest-all-min.js", "text/css");
+        } else if (method == "GET" && path == "/enums.js") {
+            sendResponse(socket, "200 OK", "text/javascript", m_enumsJsFile.toUtf8());
+        } else {
+            sendResponse(socket, "404 Not Found", "text/plain", "Page not found");
+        }
+
     }
 
     socket->disconnectFromHost();
@@ -126,7 +111,7 @@ void HttpServer::serveFile(QTcpSocket *socket, const QString &fileName, const QS
 
     QString fileContents = file.readAll();
 
-    fileContents.replace("%SERVER_PROTOCOL%", m_sslConfiguration.isNull() ? "ws" : "wss");
+    fileContents.replace("%SERVER_PROTOCOL%", m_chatServerProtocol);
     fileContents.replace("%SERVER_ADDRESS%", m_chatServerAddress);
 
     fileContents.replace("%SERVER_PORT%", QString::number(m_chatServerPort));
@@ -161,7 +146,17 @@ QString HttpServer::convertEnumToJs(const QString &enumName)
     return enumContents;
 }
 
-void HttpServer::setSslConfiguration(QSslConfiguration sslConfiguration)
+void HttpServer::setupPendingSocket()
 {
-    m_sslConfiguration = sslConfiguration;
+    QTcpSocket *socket = nextPendingConnection();
+    if (!socket) {
+        return;
+    }
+
+    connect(socket, &QTcpSocket::readyRead, this, &HttpServer::handleRequest);
+}
+
+void HttpServer::setRedirectTo(const QString &redirectTo)
+{
+    m_redirectTo = redirectTo;
 }

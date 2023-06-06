@@ -1,7 +1,6 @@
-#ifndef HTTPSERVER_H
-#define HTTPSERVER_H
+#ifndef HTTPSERVERBASE_H
+#define HTTPSERVERBASE_H
 
-#include <QSslConfiguration>
 #include <QTcpServer>
 
 class HttpServer : public QTcpServer
@@ -32,11 +31,10 @@ public:
 
     bool isValueInEnumRange(int value, const QString& enumName);
 
-    // purposefully passing by copy
-    void setSslConfiguration(QSslConfiguration sslConfiguration);
+    void setRedirectTo(const QString &redirectTo);
 
 protected:
-    void incomingConnection(qintptr socketDescriptor) override;
+    void setChatServerProtocol(const QString &protocolString);
 
 private:
     void handleRequest();
@@ -44,13 +42,15 @@ private:
     void serveFile(QTcpSocket *socket, const QString &fileName, const QString &contentType);
     void generateEnumsFile();
     QString convertEnumToJs(const QString &enumName);
+    void setupPendingSocket();
 
 private:
     QString m_chatServerAddress = "";
     quint16 m_chatServerPort = 0;
     QString m_enumsJsFile = "";
+    QString m_chatServerProtocol = "ws";
 
-    QSslConfiguration m_sslConfiguration;
+    QString m_redirectTo = "";
 };
 
-#endif // HTTPSERVER_H
+#endif // HTTPSERVERBASE_H

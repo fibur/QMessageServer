@@ -1,5 +1,6 @@
 #include "ChatServer.h"
 #include "HttpServer.h"
+#include "HttpsServer.h"
 #include "User.h"
 #include "UserManager.h"
 
@@ -48,9 +49,8 @@ void ChatServer::setupSSL(const QString &sslCertificate, const QString &sslPriva
     }
 }
 
-void ChatServer::start(const QString &ip, int httpPort, quint16 port)
+void ChatServer::start(const QString &ip, int httpPort, int httpsPort, quint16 port)
 {
-
     qDebug() << "Initiating chat server on port" << port;
     if (!m_sslConfiguration.isNull()) {
         m_webSocketServer = new QWebSocketServer(QStringLiteral("Chat Server"), QWebSocketServer::SecureMode, this);
@@ -72,21 +72,25 @@ void ChatServer::start(const QString &ip, int httpPort, quint16 port)
     connect(m_webSocketServer, &QWebSocketServer::newConnection, this, &ChatServer::onNewConnection);
     if (m_webSocketServer->listen(QHostAddress::Any, port)) {
         qDebug() << "Chat server started, listening on" << ip << ":" << m_webSocketServer->serverPort();
-        qDebug() << QString("Initiating HTTP server on port %1...").arg(httpPort);
-
-        if (m_httpServer) {
-            m_httpServer->deleteLater();
-        }
 
         m_httpServer = new HttpServer(ip, m_webSocketServer->serverPort(), this);
         if (!m_sslConfiguration.isNull()) {
-            m_httpServer->setSslConfiguration(m_sslConfiguration);
+            m_httpsServer = new HttpsServer(ip, m_webSocketServer->serverPort(), m_sslConfiguration, this);
+
+            if (m_httpsServer->listen(QHostAddress::Any, httpsPort)) {
+                qDebug() << "HTTPS server started, listening on" << ip << ":" << m_httpsServer->serverPort();
+            } else {
+                qCritical() << "Couldn't start HTTPS server on port" << httpsPort;
+                throw std::runtime_error(m_httpServer->errorString().toStdString());
+            }
+
+            m_httpServer->setRedirectTo("https://" + ip);
         }
 
         if (m_httpServer->listen(QHostAddress::Any, httpPort)) {
             qDebug() << "HTTP server started, listening on" << ip << ":" << m_httpServer->serverPort();
         } else {
-            qCritical() << "Couldn't start HTTP server on port" << port;
+            qCritical() << "Couldn't start HTTP server on port" << httpPort;
             throw std::runtime_error(m_httpServer->errorString().toStdString());
         }
     } else {
