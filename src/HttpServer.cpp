@@ -103,19 +103,29 @@ void HttpServer::sendResponse(QTcpSocket *socket, const QByteArray &status, cons
 
 void HttpServer::serveFile(QTcpSocket *socket, const QString &fileName, const QString &contentType)
 {
-    QFile file(fileName);
-    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+    QFile *file = new QFile("html" + fileName.right(fileName.length() - 1));
+
+    if (!file->exists()) {
+        file->deleteLater();
+        file = new QFile(fileName);
+    }
+
+    if (!file->open(QIODevice::ReadOnly | QIODevice::Text)) {
         sendResponse(socket, "404 Not Found", "text/plain", "File not found");
+        file->deleteLater();
         return;
     }
 
-    QString fileContents = file.readAll();
+    QString fileContent = file->readAll();
 
-    fileContents.replace("%SERVER_PROTOCOL%", m_chatServerProtocol);
-    fileContents.replace("%SERVER_ADDRESS%", m_chatServerAddress);
+    fileContent.replace("%SERVER_PROTOCOL%", m_chatServerProtocol);
+    fileContent.replace("%SERVER_ADDRESS%", m_chatServerAddress);
+    fileContent.replace("%SERVER_PORT%", QString::number(m_chatServerPort));
 
-    fileContents.replace("%SERVER_PORT%", QString::number(m_chatServerPort));
-    sendResponse(socket, "200 OK", contentType.toUtf8(), fileContents.toUtf8());
+    sendResponse(socket, "200 OK", contentType.toUtf8(), fileContent.toUtf8());
+
+    file->close();
+    file->deleteLater();
 }
 
 void HttpServer::generateEnumsFile()
