@@ -6,6 +6,7 @@
 #include <QTextCodec>
 #include <QFileInfo>
 #include <QMetaEnum>
+#include <QMimeDatabase>
 
 HttpServer::HttpServer(const QString &chatServerAddress, quint16 chatServerPort, QObject *parent)
     : QTcpServer(parent)
@@ -68,20 +69,22 @@ void HttpServer::handleRequest()
         QByteArray method = requestParts[0];
         QByteArray path = requestParts[1];
 
-        if (method == "GET" && (path == "/" || path == "/index.html")) {
-            serveFile(socket, ":/index.html", "text/html");
-        } else if (method == "GET" && path == "/script.js") {
-            serveFile(socket, ":/script.js", "text/javascript");
-        } else if (method == "GET" && path == "/style.css") {
-            serveFile(socket, ":/style.css", "text/css");
-        } else if (method == "GET" && path == "/jsrsasign-latest-all-min.js") {
-            serveFile(socket, ":/jsrsasign-latest-all-min.js", "text/css");
-        } else if (method == "GET" && path == "/enums.js") {
-            sendResponse(socket, "200 OK", "text/javascript", m_enumsJsFile.toUtf8());
+
+        if (method == "GET") {
+            if (path == "/enums.js") {
+                sendResponse(socket, "200 OK", "text/javascript", m_enumsJsFile.toUtf8());
+            } else {
+                if (path == "/") {
+                    path = "/index.html";
+                }
+
+                serveFile(socket, path, QMimeDatabase().mimeTypeForFile(path).name());
+            }
+
+            return;
         } else {
             sendResponse(socket, "404 Not Found", "text/plain", "Page not found");
         }
-
     }
 
     socket->disconnectFromHost();
@@ -103,20 +106,14 @@ void HttpServer::sendResponse(QTcpSocket *socket, const QByteArray &status, cons
 
 void HttpServer::serveFile(QTcpSocket *socket, const QString &fileName, const QString &contentType)
 {
-    QFile *file = new QFile("html" + fileName.right(fileName.length() - 1));
+    QFile file("html" + fileName);
 
-    if (!file->exists()) {
-        file->deleteLater();
-        file = new QFile(fileName);
-    }
-
-    if (!file->open(QIODevice::ReadOnly | QIODevice::Text)) {
+    if (!file.exists() || !file.open(QIODevice::ReadOnly | QIODevice::Text)) {
         sendResponse(socket, "404 Not Found", "text/plain", "File not found");
-        file->deleteLater();
         return;
     }
 
-    QString fileContent = file->readAll();
+    QString fileContent = file.readAll();
 
     fileContent.replace("%SERVER_PROTOCOL%", m_chatServerProtocol);
     fileContent.replace("%SERVER_ADDRESS%", m_chatServerAddress);
@@ -124,8 +121,7 @@ void HttpServer::serveFile(QTcpSocket *socket, const QString &fileName, const QS
 
     sendResponse(socket, "200 OK", contentType.toUtf8(), fileContent.toUtf8());
 
-    file->close();
-    file->deleteLater();
+    file.close();
 }
 
 void HttpServer::generateEnumsFile()
