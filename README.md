@@ -35,13 +35,13 @@ cmake --build .
 
 ### Usage
 
+#### Backend
 After building the project, you can start the server by executing the built binary. The server supports command-line options to configure different aspects such as ports, server IP, and SSL certificates:
 
 ```
 ./QMessageServer -chatServerPort 12345 -httpServerPort 8080 -httpsServerPort 8443 -serverIp localhost -sslCertificate path/to/certificate -sslPrivateKey path/to/privatekey
 ```
-
-#### Command Line Options
+#### Server file Command Line Options
 
 - `-chatServerPort`, `-csp`, `-cp`: Set the chat server port (default: 12345).
 - `-httpServerPort`, `-httpPort`, `-hp`: Set the HTTP server port (default: 8080).
@@ -49,6 +49,54 @@ After building the project, you can start the server by executing the built bina
 - `-serverIp`, `-ip`: Set the server IP address (default: localhost).
 - `-sslCertificate`, `-sslcert`: Set the server's SSL certificate file path.
 - `-sslPrivateKey`, `-sslprvkey`: Set the server's SSL private key file path.
+
+#### Frontend
+Server loads HTML dynamically, from `{workinkg-directory}`/html folder. You have to provide frontend by your own, or use content from the `exampleHTML` folder, which provides full functionality, with simple UI. If you want to create it by your own, then below you can find basic informations about communication workflow.
+
+
+## User Management Workflow
+
+The `UserManager` class is responsible for managing the users of the chat application. This class takes care of creating, loading, saving, authorizing, and de-authorizing users. It also handles user authentication.
+
+### Initialization
+
+When a `UserManager` object is created, it connects to an SQLite database (`users.db`), and if the database doesn't exist, it creates one. It also creates a table named `users` if it doesn't already exist.
+
+### Loading Users
+
+The `loadUsers` method is responsible for loading the users from the database into memory.
+
+### Saving Users
+
+The `saveUser` method saves a new user to the database if it does not exist already.
+
+### User Authentication
+
+The `authenticateUser` method checks if a user with the given name and password exists in memory.
+
+### User Authorization
+
+`UserManager` also handles user authorization by generating a unique token for an authenticated user and setting the last active time.
+
+### User Deauthorization
+
+It also deauthorizes inactive users by setting their token to an empty string and their socket to null.
+
+### Generating Unique IDs
+
+Unique IDs are generated for new users with `generateUniqueID`.
+
+### Password Hashing
+
+Passwords are hashed using SHA-256 before being stored in the database.
+
+### User Lookup
+
+Users can be looked up by their token, name, or ID using the respective methods.
+
+### Active Users
+
+The class provides a method to get a list of currently active users.
 
 ## Communication with the WebSocket Server
 
@@ -188,7 +236,8 @@ fetch('http(s)://<address>/enums.js')
   });
 ```
 
-
+## Examples
+Folder `exampleHTML` contains fully functional HTML content example, which is compatible with server implementation. Feel free to adjust it to your needs.
 ## Contributing
 
 Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.

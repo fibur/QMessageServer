@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="style.css">
+    <title>Chat</title>
+    <script src="jsrsasign-latest-all-min.js"></script>
+</head>
+<body>
+    <div id="loginForm" class="form-container">
+        <h2 id="formHeader">Login</h2>
+        <input class="login-input" type="text" id="username" placeholder="Enter your username" required>
+        <input class="login-input" type="password" id="password" placeholder="Password" required>
+        <div id="registerFields" class="register-fields hidden">
+            <input class="login-input" type="password" id="confirmPassword" placeholder="Confirm Password" required>
+        </div>
+        <div id="formControls" class="form-controls">
+            <div class="register-container">
+                <input class="login-input" type="checkbox" id="registerCheckbox" onchange="toggleRegisterFields()">
+                <label for="registerCheckbox"><span>Register</span></label>
+            </div>
+            <button id="formButton" type="button" class="form-button" onclick="login()">Login</button>
+            <span id="formError" class="form-error"></span>
+        </div>
+        <div id="indicatorContainer" class="loading-container hidden">
+            Creating keypair...
+            <div id="loadingIndicator"></div>
+        </div>
+    </div>    
+    <div id="chat" class="chat-container hidden">
+        <div id="users" class="users-container">
+            <div class="users-header">
+                <h2>Users</h2>
+                <button class="logout-button" onclick="logout()">Logout</button>
+            </div>
+            <ul id="userList" class="user-list"></ul>
+        </div>
+        <div id="messages" class="messages-container">
+            <h2>Messages</h2>
+            <div id="messageHistory" class="message-container"></div>
+            <div class="message-input-container">
+                <input type="text" id="message" placeholder="Type your message here" />
+                <button class="btn send-button" onclick="sendMessage()">Send</button>
+            </div>
+        </div>
+    </div>
+    <script src="enums.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
