@@ -59,7 +59,7 @@ bool UserManager::saveUser(const QString &name, const QString &password) {
 
 User *UserManager::authenticateUser(const QString &name, const QString &password) {
     for (User* user : qAsConst(m_users)) {
-        if (user->name() == name && user->password() == password) {
+        if (user->name().toLower() == name.toLower() && user->password() == password) {
             return user;
         }
     }
@@ -87,7 +87,7 @@ User *UserManager::findUserByToken(const QString &token)
 User *UserManager::findUserByName(const QString &name)
 {
     const auto result = std::find_if(m_users.begin(), m_users.end(), [&name](User* user){
-        if (user->name() == name) {
+        if (user->name().toLower() == name.toLower()) {
             return true;
         }
 

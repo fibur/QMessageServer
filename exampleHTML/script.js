@@ -150,7 +150,7 @@ function sendMessage() {
       message = messageValue;
     } catch (exception) {
       message += exception;
-      messageType.append("error");
+      messageType.push("error");
     }
 
     addMessageToHistoryDiv(message, messageType);
@@ -206,7 +206,7 @@ function handleMessage(data) {
     if (!!currentUser && currentUser.id === data.sender) {
         let messageType = ["message", "received"];
         if (error) {
-          messageType.append("error");
+          messageType.push("error");
         }
 
         addMessageToHistoryDiv(decryptedMessage, messageType);
@@ -390,4 +390,21 @@ function encryptMessage(publicKey, ciphertext) {
   var rsaPublicKey = KEYUTIL.getKey(publicKey);
   var encryptedMessage = rsaPublicKey.encrypt(ciphertext);
   return encryptedMessage;
+}
+
+let isUserListVisible = true;
+
+function toggleUserList() {
+    const usersContainer = document.getElementById('users');
+    const arrowButton = document.getElementById('arrowButton');
+
+    if (isUserListVisible) {
+        usersContainer.classList.add('hidden-users');
+        arrowButton.classList.add('hide');
+    } else {
+        usersContainer.classList.remove('hidden-users');
+        arrowButton.classList.remove('hide');
+    }
+
+    isUserListVisible = !isUserListVisible;
 }

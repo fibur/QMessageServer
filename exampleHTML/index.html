@@ -30,8 +30,9 @@
     </div>    
     <div id="chat" class="chat-container hidden">
         <div id="users" class="users-container">
+            <div id="arrowButton" class="arrow-button" onclick="toggleUserList()">&#x276E;</div>
             <div class="users-header">
-                <h2>Users</h2>
+                <h2 id="usersHeaderText">Users</h2>
                 <button class="logout-button" onclick="logout()">Logout</button>
             </div>
             <ul id="userList" class="user-list"></ul>
