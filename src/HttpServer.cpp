@@ -71,7 +71,7 @@ void HttpServer::handleRequest()
 
 
         if (method == "GET") {
-            if (path == "/enums.js") {
+            if (path == "/enums.mjs") {
                 sendResponse(socket, "200 OK", "text/javascript", m_enumsJsFile.toUtf8());
             } else {
                 if (path == "/") {
@@ -132,7 +132,7 @@ void HttpServer::generateEnumsFile()
 
 QString HttpServer::convertEnumToJs(const QString &enumName)
 {
-    QString enumContents = "const %1 = {";
+    QString enumContents = "export const %1 = {";
 
     enumContents = enumContents.arg(enumName);
     enumContents += "\n";
