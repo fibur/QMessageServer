@@ -33,6 +33,14 @@ int main(int argc, char *argv[]) {
     QCommandLineOption sslPrivateKeyOption(QStringList() << "sslPrivateKey" << "sslprvkey",
                                            "Set the server IP address.", "sslPrivateKey file", "");
 
+    QCommandLineOption disableHttpsOption(QStringList() << "disableHttps",
+                                         "Disable HTTPS encryption.");
+    parser.addOption(disableHttpsOption);
+
+    QCommandLineOption disableWssOption(QStringList() << "disableWss",
+                                       "Disable WSS (WebSocket over HTTPS).");
+    parser.addOption(disableWssOption);
+
     parser.addOption(sslPrivateKeyOption);
 
     parser.process(app);
@@ -45,12 +53,18 @@ int main(int argc, char *argv[]) {
     QString sslCertificate = parser.value(sslCertificateOption);
     QString sslPrivateKey = parser.value(sslPrivateKeyOption);
 
+    bool disableHttps = parser.isSet(disableHttpsOption);
+    bool disableWss = parser.isSet(disableWssOption);
+
     ChatServer server;
     if (!sslCertificate.isEmpty() && !sslPrivateKey.isEmpty()) {
         server.setupSSL(sslCertificate, sslPrivateKey);
     }
 
-    server.start(serverIp, httpServerPort.toInt(), httpsServerPort.toInt(), chatServerPort.toInt());
+    qDebug() << "test" << disableHttps << disableWss;
+
+    server.start(serverIp, httpServerPort.toInt(), httpsServerPort.toInt(), chatServerPort.toInt(),
+                 disableHttps, disableWss);
 
     return app.exec();
 }

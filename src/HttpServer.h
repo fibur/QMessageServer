@@ -32,8 +32,6 @@ public:
     bool isValueInEnumRange(int value, const QString& enumName);
 
     void setRedirectTo(const QString &redirectTo);
-
-protected:
     void setChatServerProtocol(const QString &protocolString);
 
 private:

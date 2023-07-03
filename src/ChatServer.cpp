@@ -27,7 +27,7 @@ void ChatServer::setupSSL(const QString &sslCertificate, const QString &sslPriva
 
         QFile privateKeyFile(sslPrivateKey);
         if (privateKeyFile.open(QFile::OpenModeFlag::ReadOnly)) {
-            QSslKey privateKey(&privateKeyFile, QSsl::Ec, QSsl::Pem, QSsl::PrivateKey);
+            QSslKey privateKey(&privateKeyFile, QSsl::Rsa, QSsl::Pem, QSsl::PrivateKey);
 
             m_sslConfiguration = QSslConfiguration();
             m_sslConfiguration.setLocalCertificate(certificate);
@@ -49,22 +49,24 @@ void ChatServer::setupSSL(const QString &sslCertificate, const QString &sslPriva
     }
 }
 
-void ChatServer::start(const QString &ip, int httpPort, int httpsPort, quint16 port)
+void ChatServer::start(const QString &ip, int httpPort, int httpsPort, quint16 port, bool disableHttps, bool disableWss)
 {
     qDebug() << "Initiating chat server on port" << port;
-    if (!m_sslConfiguration.isNull()) {
-        m_webSocketServer = new QWebSocketServer(QStringLiteral("Chat Server"), QWebSocketServer::SecureMode, this);
-        qDebug() << "SSL configuration loaded, running on secure connection";
 
-        m_sslConfiguration.setPeerVerifyMode(QSslSocket::VerifyNone);
-        m_sslConfiguration.setProtocol(QSsl::TlsV1SslV3);
+    if (!m_sslConfiguration.isNull() && !disableWss) {
+            m_webSocketServer = new QWebSocketServer(QStringLiteral("Chat Server"), QWebSocketServer::SecureMode, this);
+            qDebug() << "SSL configuration loaded, running on secure connection";
 
-        m_webSocketServer->setSslConfiguration(m_sslConfiguration);
-        connect(m_webSocketServer, &QWebSocketServer::sslErrors, this, [this](const QList<QSslError> &errors) {
-            for (const auto &error : errors) {
-                qWarning() << error;
-            }
-        });
+            m_sslConfiguration.setPeerVerifyMode(QSslSocket::VerifyNone);
+            m_sslConfiguration.setProtocol(QSsl::TlsV1SslV3);
+
+            m_webSocketServer->setSslConfiguration(m_sslConfiguration);
+
+            connect(m_webSocketServer, &QWebSocketServer::sslErrors, this, [this](const QList<QSslError> &errors) {
+                for (const auto &error : errors) {
+                    qWarning() << error;
+                }
+            });
     } else {
         m_webSocketServer = new QWebSocketServer(QStringLiteral("Chat Server"), QWebSocketServer::NonSecureMode, this);
     }
@@ -74,7 +76,8 @@ void ChatServer::start(const QString &ip, int httpPort, int httpsPort, quint16 p
         qDebug() << "Chat server started, listening on" << ip << ":" << m_webSocketServer->serverPort();
 
         m_httpServer = new HttpServer(ip, m_webSocketServer->serverPort(), this);
-        if (!m_sslConfiguration.isNull()) {
+
+        if (!m_sslConfiguration.isNull() && !disableHttps) {
             m_httpsServer = new HttpsServer(ip, m_webSocketServer->serverPort(), m_sslConfiguration, this);
 
             if (m_httpsServer->listen(QHostAddress::Any, httpsPort)) {
@@ -85,6 +88,8 @@ void ChatServer::start(const QString &ip, int httpPort, int httpsPort, quint16 p
             }
 
             m_httpServer->setRedirectTo("https://" + ip);
+        } else {
+            qDebug() << "http" << m_sslConfiguration.isNull() << disableHttps;
         }
 
         if (m_httpServer->listen(QHostAddress::Any, httpPort)) {

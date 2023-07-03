@@ -1,12 +1,10 @@
 #include "HttpServer.h"
 
-#include <QTcpSocket>
 #include <QDateTime>
-#include <QResource>
-#include <QTextCodec>
-#include <QFileInfo>
+#include <QFile>
 #include <QMetaEnum>
 #include <QMimeDatabase>
+#include <QTcpSocket>
 
 HttpServer::HttpServer(const QString &chatServerAddress, quint16 chatServerPort, QObject *parent)
     : QTcpServer(parent)

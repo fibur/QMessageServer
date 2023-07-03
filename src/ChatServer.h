@@ -22,7 +22,10 @@ public:
     void setupSSL(const QString &sslCertificate, const QString &sslPrivateKey);
 
 public slots:
-    void start(const QString &ip, int httpPort, int httpsPort = 8443, quint16 port = 12345);
+    void start(const QString &ip, int httpPort, int httpsPort = 8443,
+               quint16 port = 12345,
+               bool disableHttps = false,
+               bool disableWss = false);
 
 private slots:
     void onNewConnection();

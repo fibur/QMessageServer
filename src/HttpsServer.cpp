@@ -1,12 +1,5 @@
 #include "HttpsServer.h"
 
-#include <QTcpSocket>
-#include <QDateTime>
-#include <QResource>
-#include <QTextCodec>
-#include <QFileInfo>
-#include <QMetaEnum>
-
 HttpsServer::HttpsServer(const QString &chatServerAddress, quint16 chatServerPort, QSslConfiguration sslConfiguration, QObject *parent)
     : HttpServer(chatServerAddress, chatServerPort, parent)
     , m_sslConfiguration(sslConfiguration)
